@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LORE — 웹툰을 만들고 있습니다</title>
+<link rel="stylesheet" href="/static/style.css">
+<!-- /nh 검수 화면 — 실제 화면(newharness.html)과 같은 파일을 읽는다. -->
+<link rel="stylesheet" href="/static/nh-review.css">
+<script src="/static/nh-review.js"></script>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐋</text></svg>">
+</head>
+<body data-view="running">
+
+<!-- 기다리는 화면 목업. index.html #progress 의 사본이라 마크업이 같아야
+     한다 — 본편이 바뀌면 여기도 같이 고친다. 다른 것은 진행이 가짜라는
+     것뿐이고, 화면에는 그 사실이 안 보인다. -->
+<section id="progress" class="progress">
+  <div class="progress-inner">
+
+    <header class="progress-head">
+      <div class="stage-now">
+        <div class="stage-art" id="stageArt" data-stage="story" aria-hidden="true"></div>
+        <p class="stage-say" id="mascotLine">루가 이야기를 만들고 있어요</p>
+        <div class="lou-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="louProgress">
+          <div class="lou-bar"><i id="louBarFill"></i></div>
+          <span class="lou-pct" id="louPct">0%</span>
+        </div>
+        <p class="stage-clock">
+          <span class="clock-time" id="clock">0:00</span>
+          <span class="clock-label">경과</span>
+        </p>
+        <details class="stage-detail">
+          <summary>지금 하고 있는 일 자세히</summary>
+          <ol class="rail" id="rail"></ol>
+        </details>
+        <!-- 본편과 같은 자리·같은 모양. 여기서 나가면 본편의 둘러보기로 간다 —
+             떠 있는 진행 표시(#miniProg)는 **실제로 도는 작업이 있을 때만** 뜨는
+             것이라, 진행이 가짜인 이 목업에서는 안 나온다. -->
+        <button type="button" class="btn btn-quiet btn-sm stage-away" id="progBrowse">
+          기다리는 동안 다른 웹툰 둘러보기 →
+        </button>
+      </div>
+
+    </header>
+
+    <!-- 그림 그리는 동안 지금까지 나온 페이지를 보여주는 자리 — 실제 화면
+         (newharness.html 의 #livePages)과 같은 자리·같은 모양. 목업이라
+         진짜 결과 대신 같은 샘플 이미지를 여러 장 보여준다. -->
+    <div class="nh-live-pages" id="demoLivePages" hidden>
+      <h3 id="demoLivePagesLabel">지금까지 그린 페이지</h3>
+      <div class="nh-pages" id="demoLivePagesList"></div>
+    </div>
+
+    <div class="play">
+      <div class="mascot-stage" id="mascotStage">
+        <button type="button" class="mascot" id="mascot" aria-label="루를 눌러 보기">
+          <img id="mascotImg" src="/static/lou/react/idle/01.webp" alt="" draggable="false">
+        </button>
+      </div>
+      <p class="play-say" id="playSay">루를 눌러 보세요</p>
+      <p class="play-hint" id="playHint">누르기 · 연달아 누르기 · 꾹 누르기 · 끌어당기기 · 잡고 흔들기</p>
+      <button type="button" class="btn btn-quiet btn-sm" id="shakeAllow" hidden>흔들기 켜기</button>
+    </div>
+
+    <div class="tips" id="tips" hidden aria-live="polite">
+      <span class="tip-kind" id="tipKind">팁</span>
+      <p class="tip-text" id="tipText"></p>
+    </div>
+
+    <!-- 본편(index.html)과 같은 자리·같은 모양. 되돌릴 수 없는 일은 화면
+         한가운데가 아니라 찾아가서 눌러야 하는 자리에 둔다. -->
+    <div class="cancel-row">
+      <button type="button" class="btn btn-danger btn-sm" id="cancelBtn">만들기 중단</button>
+    </div>
+  </div>
+</section>
+
+<!-- 본편과 같은 확인 창. 목업이라 실제로 멈출 것은 없고 홈으로 나간다. -->
+<div class="modal-veil" id="cancelModal" hidden>
+  <div class="modal-box modal-narrow" role="dialog" aria-modal="true"
+       aria-labelledby="cancelModalTitle">
+    <h3 id="cancelModalTitle">정말로 중단하시겠습니까?</h3>
+    <p class="cancel-warn"><b>크레딧은 환불되지 않습니다.</b></p>
+    <p class="cancel-sub">지금까지 그려 둔 장은 그대로 남습니다 — 편집실에서 볼 수 있습니다.</p>
+    <div class="cancel-actions">
+      <button type="button" class="btn btn-quiet" id="cancelKeep">계속 만들기</button>
+      <button type="button" class="btn btn-danger" id="cancelConfirm">중단하기</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/base.js"></script>
+<script>
+  // demo 는 app.js 를 안 불러온다 — 여기 없는 요소를 배선하다 죽는다.
+  // 그래서 같은 동작을 작게 다시 쓴다(본편이 바뀌면 여기도 맞춰야 한다).
+  (function () {
+    var modal = document.getElementById("cancelModal");
+    document.getElementById("cancelBtn").addEventListener("click", function () {
+      modal.hidden = false;
+      document.getElementById("cancelKeep").focus();
+    });
+    document.getElementById("cancelKeep").addEventListener("click", function () {
+      modal.hidden = true;
+    });
+    modal.addEventListener("click", function (e) {
+      if (e.target === modal) modal.hidden = true;
+    });
+    document.getElementById("cancelConfirm").addEventListener("click", function () {
+      location.href = LORE.HOME;
+    });
+    // 목업에는 둘러보기 화면이 없다 — 본편의 둘러보기로 그대로 보낸다.
+    document.getElementById("progBrowse").addEventListener("click", function () {
+      location.href = LORE.at("/works");
+    });
+  })();
+</script>
+
+<!-- 루와 노는 자리는 본편과 **같은 파일**을 쓴다. 예전에는 여기에 같은 로직을
+     베껴 뒀다가 본편이 바뀔 때마다 둘이 갈라졌다. -->
+<script src="/static/lou-art.js"></script>
+<script src="/static/lou-play.js"></script>
+<script>
+/* 데모 대본 — 진행만 가짜로 돌린다. app.js 는 안 부른다(여기 없는 요소를
+   배선하다 죽는다). 루는 위 lou-play.js 의 setupLou() 가 맡는다. */
+(() => {
+  const $ = s => document.querySelector(s);
+  const art = $("#stageArt"), say = $("#mascotLine");
+
+  // new_harness(이어그리기) 흐름을 데모용으로 옮긴 것 — 2026-09-02부터
+  // 구체화·콘티(board)가 없어졌다: 방향 후보를 고르면 바로 시트 → 그림
+  // 단계로 간다. 본편이 바뀌면 여기도 같이 고친다.
+  const SPEC = [
+    { key: "story", title: "이야기 설계", desc: "캐릭터에서 이야기 후보 4개를 만들고, 고른 방향을 정리합니다",
+      say: "루가 이야기를 만들고 있어요",
+      steps: ["사진에서 외형 읽기", "장르·세계관 정하기", "이야기 후보 4개 쓰기",
+              "등장인물 외모 뽑기", "고른 방향 정리"] },
+    { key: "sheet", title: "캐릭터 시트", desc: "컷마다 같은 얼굴이 나오도록 기준 그림을 만듭니다",
+      say: "루가 캐릭터를 디자인하고 있어요",
+      steps: ["외형 사양 정리", "시트 그리기", "기준 시트 확정"] },
+    { key: "art", title: "그림 그리기", desc: "표지부터 장면 순서대로, 직전 장과 이어서 한 장씩 그립니다",
+      say: "루가 그림을 그리고 있어요",
+      steps: ["표지 그리기", "장면 순서대로 이어 그리기"] },
+    { key: "bind", title: "한 편으로 잇기", desc: "그린 장을 순서대로 세로로 이어 붙입니다",
+      say: "루가 완성도를 확인하고 있어요",
+      steps: ["이어 붙이기"] },
+  ];
+  const STAGES = SPEC.map(x => x.key);
+
+  // 토글을 열면 보이는 자세한 자리. 진행 중인 단계만 안쪽 항목을 편다.
+  function paintRail(active, frac) {
+    $("#rail").innerHTML = SPEC.map((st, n) => {
+      const state = n < active ? "done" : n === active ? "active" : "todo";
+      const mark = state === "done" ? "✓" : String(n + 1).padStart(2, "0");
+      const cut = Math.round(st.steps.length * frac);
+      const steps = state === "active" ? `<ul class="steps">${st.steps.map((label, k) => `
+          <li data-state="${k < cut ? "done" : "todo"}">
+            <span class="tick">${k < cut ? "✓" : ""}</span>${label}
+          </li>`).join("")}</ul>` : "";
+      return `
+        <li class="stage" data-state="${state}">
+          <span class="stage-dot">${mark}</span>
+          <div class="stage-main">
+            <h3>${st.title}</h3>
+            <p class="stage-desc">${st.desc}</p>
+            ${steps}
+          </div>
+        </li>`;
+    }).join("");
+  }
+  let i = 0, pct = 2;
+  const started = Date.now();
+
+  // /nh(이어그리기)는 그림 단계에서 "컷 N/M" 식으로 진행을 보여준다
+  // (newharness.html 의 art.done/art.total) — 목업에도 같은 문구를 보여줘야
+  // 실제 화면과 달라 보이지 않는다. 페이지 수(표지+장면)는 위 NH_DIRECTIONS
+  // 4번 방향(5장면)과 맞춘 6으로 고정한다.
+  const ART_TOTAL = 6;
+  let liveShown = -1;
+
+  // 실제 화면의 renderLivePages(done) 과 같은 역할 — 목업이라 매번 같은
+  // 샘플 이미지를 done 장만큼 보여준다(실제로는 서로 다른 그림이 나온다).
+  function renderDemoLivePages(done) {
+    const box = $("#demoLivePages");
+    if (!done) { box.hidden = true; return; }
+    box.hidden = false;
+    $("#demoLivePagesLabel").textContent = `지금까지 그린 페이지 (${done}장)`;
+    if (done === liveShown) return;
+    liveShown = done;
+    $("#demoLivePagesList").innerHTML = Array.from({ length: done }, (_, k) => k + 1).reverse()
+      .map(n => `<div class="nh-page"><img src="/static/demo/scene_sample.jpg" alt="페이지 ${n}"></div>`).join("");
+  }
+
+  function paint() {
+    art.dataset.stage = SPEC[i].key;
+    const lo = i / STAGES.length * 100, hi = (i + 1) / STAGES.length * 100;
+    const stageFrac = Math.max(0, Math.min(1, (pct - lo) / (hi - lo)));
+    const done = Math.min(ART_TOTAL, Math.round(stageFrac * ART_TOTAL));
+    say.textContent = SPEC[i].key === "art" ? `${SPEC[i].say} (${done}/${ART_TOTAL})` : SPEC[i].say;
+    if (SPEC[i].key === "art") renderDemoLivePages(done);
+    else $("#demoLivePages").hidden = true, liveShown = -1;
+    $("#louBarFill").style.width = pct + "%";
+    $("#louPct").textContent = pct + "%";
+    $("#louProgress").setAttribute("aria-valuenow", String(pct));
+    paintRail(i, stageFrac);
+  }
+
+  // 진행 — 단계 경계를 넘으면 다음 단계로. 끝까지 가면 처음으로 돌아간다
+  // (구경하는 화면이라 계속 돈다).
+  setInterval(() => {
+    pct += 1;
+    const bound = (i + 1) / STAGES.length * 100;
+    if (pct >= bound) {
+      i += 1;
+      if (i >= STAGES.length) { i = 0; pct = 2; }
+    }
+    paint();
+  }, 700);
+
+  setInterval(() => {
+    const s = Math.floor((Date.now() - started) / 1000);
+    $("#clock").textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  }, 1000);
+
+  paint();
+  setupLou();
+  setupTips();
+})();
+</script>
+
+<!-- ================================================== 승인 화면 시연 =====
+     본편(index.html)의 승인 팝업 네 개를 **가짜 데이터로 채워** 보여준다.
+     실제 파이프라인이 멈추는 자리를 시연·검토용으로 언제든 열어 볼 수 있게 —
+     본편에서는 실제로 그 단계에 걸려야만 뜨기 때문에, 화면을 검토하려면
+     매번 생성을 돌려야 했다. 마크업은 index.html 의 사본이라 같아야 한다.
+     스토리·콘티 화면이 곧 "실패(게이트 재시도 소진)" 화면이다 — 본편에서
+     그 둘은 자동 재시도를 다 썼을 때만 뜬다. -->
+<nav class="demo-approvals-bar" aria-label="승인 화면 시연">
+  <b>승인 화면 보기:</b>
+  <button type="button" data-demo="sheetApproval">캐릭터 시트</button>
+  <button type="button" data-demo="storyApproval">스토리 검수 (실패)</button>
+  <button type="button" data-demo="boardApproval">콘티 검수 (실패)</button>
+  <button type="button" data-demo="artqaApproval">그림 검수</button>
+  <b>/nh:</b>
+  <button type="button" data-demo="nhPicker">방향 고르기</button>
+  <button type="button" data-demo="nhBoard">콘티</button>
+  <button type="button" data-demo="nhSheet">시트</button>
+  <button type="button" data-demo="">닫기</button>
+</nav>
+<style>
+  .demo-approvals-bar {
+    position: fixed; left: 50%; bottom: 12px; transform: translateX(-50%);
+    z-index: 80; display: flex; gap: 6px; align-items: center;
+    background: var(--card); border: 1px solid var(--line-2);
+    border-radius: 999px; padding: 8px 14px; box-shadow: var(--shadow);
+    font-size: .8rem; white-space: nowrap;
+  }
+  .demo-approvals-bar b { color: var(--accent-d); margin-right: 2px; }
+  .demo-approvals-bar button {
+    border: 1px solid var(--line-2); background: var(--ink-2); color: var(--text);
+    border-radius: 999px; padding: .45em .8em; font: inherit; cursor: pointer;
+  }
+  .demo-approvals-bar button:hover { border-color: var(--accent); color: var(--accent-d); }
+  /* 시연 팝업은 승인 없이도 닫혀야 한다 — 본편과 달리 바깥을 눌러도 닫힌다 */
+  .approval-veil .demo-hint {
+    text-align: center; color: #fff; font-size: .78rem; margin-top: 10px;
+    text-shadow: 0 1px 4px rgba(0,0,0,.4);
+  }
+  /* /nh 화면(방향 고르기·검수)만 넓힌다 — 본편 승인 팝업(.approval-box)은
+     앱의 480px 프레임에 맞춘 것이라(위 주석 참고) 건드리지 않는다. */
+  @media (min-width: 760px) {
+    .approval-veil.nh-wide .approval-box { max-width: 880px; }
+  }
+  /* /nh 그림 그리는 동안 미리보기 — newharness.html 의 #livePages 와 같은
+     모양(그 페이지는 이 규칙을 자기 <style> 에 따로 갖고 있다. 목업은
+     nh-review.css 를 안 늘리려고 여기 따로 둔다). */
+  .nh-live-pages { margin-top: 12px; }
+  .nh-live-pages h3 { font-size: 13px; color: var(--muted, #666); margin: 0 0 8px; text-align: center; }
+  .nh-pages { display: flex; flex-direction: column; gap: 10px; }
+  .nh-page { border-radius: 8px; overflow: hidden; border: 1px solid var(--line-2, #ddd); }
+  .nh-page img { width: 100%; display: block; }
+</style>
+
+<div class="modal-veil approval-veil" id="approvalModal" hidden>
+  <div class="modal-box approval-box" role="dialog" aria-modal="true">
+
+    <!-- 1 · 캐릭터 시트 승인 -->
+    <div class="sheet-approval" id="sheetApproval" hidden>
+      <div class="sheet-approval-head">
+        <h3>캐릭터 시트를 확인해 주세요</h3>
+        <p>이제부터 모든 컷이 이 얼굴을 따라갑니다. 원본과 다르면 여기서 다시 만드세요 —
+           진행한 뒤에는 뒤 컷 전부가 이 시트를 기준으로 그려집니다.</p>
+      </div>
+      <div class="sheet-approval-compare">
+        <figure class="sheet-approval-sheet">
+          <img src="/static/demo/sheet_sample.jpg" alt="생성된 캐릭터 시트">
+          <figcaption>생성된 시트</figcaption>
+        </figure>
+      </div>
+      <div class="fb-box">
+        <p class="fb-lead">무엇이 마음에 안 드나요?
+          <small>체크하면 루가 다시 그릴 때 훨씬 쉬워요!</small></p>
+        <div class="fb-tags">
+          <button type="button" class="fb-tag" aria-pressed="false">얼굴이 원본과 달라요</button>
+          <button type="button" class="fb-tag" aria-pressed="false">옷·장신구가 달라요</button>
+          <button type="button" class="fb-tag" aria-pressed="true">머리 모양이 달라요</button>
+          <button type="button" class="fb-tag" aria-pressed="false">그림체가 생각과 달라요</button>
+          <button type="button" class="fb-tag" aria-pressed="false">기타</button>
+        </div>
+      </div>
+      <div class="sheet-approval-actions">
+        <button type="button" class="btn btn-quiet">수정 반영해서 다시 만들기</button>
+        <button type="button" class="btn btn-primary">이대로 진행</button>
+      </div>
+    </div>
+
+    <!-- 2 · 스토리 검수 — 실패(게이트 재시도 소진) 화면 -->
+    <div class="sheet-approval" id="storyApproval" hidden>
+      <div class="sheet-approval-head">
+        <h3>이야기 구조를 확인해 주세요</h3>
+        <p class="approval-reason">1화의 열린 질문 2개 중 어느 것도 닫히지
+           않았습니다 — 독자에게 답을 주기로 한 약속이 지켜지지 않고 있습니다.</p>
+        <p>
+          자동으로 다시 쓰는 시도(게이트 재시도)를 다 써서 더 못 고쳤습니다.
+          <b>이대로 진행</b>하면 지금 이 상태 그대로 다음 단계(캐릭터 시트)로
+          넘어갑니다 — <b>다시 만들기</b>를 누르면 같은 캐릭터로 이야기를
+          처음부터 새로 뽑습니다(새 시도이니 다른 결과가 나올 수 있습니다).
+        </p>
+      </div>
+      <div class="approval-preview">
+        <p><b>1화 「강아지와 소녀, 그리고 첫 번째 폭주」</b></p>
+        <p>도시의 위험구역 한복판, 한리아가 강아지를 안고 히어로·빌런이 대치하는
+           한가운데로 들어선다. 빌런의 공격에 강아지가 휘말려 죽자, 한리아가
+           말없이 시선을 꽂고 — 빌런의 심장이 멎는다. 도심이 식물로 뒤덮이기
+           시작한다.</p>
+        <p class="hint">마지막 훅: 서도윤이 쓰러진 빌런과 한리아를 번갈아 본다.
+           "도대체… 넌 뭐야?"</p>
+      </div>
+      <div class="fb-box">
+        <p class="fb-lead">무엇이 마음에 안 드나요?
+          <small>체크하면 루가 다시 쓸 때 훨씬 쉬워요!</small></p>
+        <div class="fb-tags">
+          <button type="button" class="fb-tag" aria-pressed="false">고른 장르 느낌이 안 나요</button>
+          <button type="button" class="fb-tag" aria-pressed="false">개연성이 없어요</button>
+          <button type="button" class="fb-tag" aria-pressed="false">전개가 급하거나 지루해요</button>
+          <button type="button" class="fb-tag" aria-pressed="false">기타</button>
+        </div>
+      </div>
+      <div class="sheet-approval-actions">
+        <button type="button" class="btn btn-quiet">다시 만들기</button>
+        <button type="button" class="btn btn-primary">이대로 진행</button>
+      </div>
+    </div>
+
+    <!-- 3 · 콘티 검수 — 실패(게이트 재시도 소진) 화면 -->
+    <div class="sheet-approval" id="boardApproval" hidden>
+      <div class="sheet-approval-head">
+        <h3>콘티(컷 설계)를 확인해 주세요</h3>
+        <p class="approval-reason">1번째 장면이 7컷입니다 (한 화면에 담기는 것은
+           2~5컷) — 자동으로 나눠 봤지만 리듬이 계속 어긋납니다.</p>
+        <p>
+          자동으로 다시 쓰는 시도(게이트 재시도)를 다 써서 더 못 고쳤습니다.
+          <b>이대로 진행</b>하면 지금 이 콘티 그대로 그림 단계로 넘어갑니다 —
+          <b>다시 만들기</b>를 누르면 콘티를 처음부터 다시 짭니다(새 시도이니
+          다른 결과가 나올 수 있습니다).
+        </p>
+      </div>
+      <div class="approval-preview">
+        <p><b>컷 1</b> · 원경 — 폐허가 된 상가거리, 멀리 대치하는 두 실루엣</p>
+        <p><b>컷 2</b> · 전신 — 한리아가 강아지를 안고 걸어온다
+           <span class="hint">"서도윤: 거기, 강아지 안고 있는 분! 멈추세요, 위험합니다!"</span></p>
+        <p><b>컷 3</b> · 중간 — 빌런이 돌아본다
+           <span class="hint">"빌런: 애나 좀 치워. 진짜 방해되잖아."</span></p>
+        <p class="hint">… 아래 9컷 생략 …</p>
+      </div>
+      <div class="fb-box">
+        <p class="fb-lead">무엇이 마음에 안 드나요?
+          <small>체크하면 루가 다시 짤 때 훨씬 쉬워요!</small></p>
+        <div class="fb-tags">
+          <button type="button" class="fb-tag" aria-pressed="false">컷 흐름이 끊겨요</button>
+          <button type="button" class="fb-tag" aria-pressed="false">중요한 장면이 빠졌어요</button>
+          <button type="button" class="fb-tag" aria-pressed="false">기타</button>
+        </div>
+      </div>
+      <div class="sheet-approval-actions">
+        <button type="button" class="btn btn-quiet">다시 만들기</button>
+        <button type="button" class="btn btn-primary">이대로 진행</button>
+      </div>
+    </div>
+
+    <!-- 4 · 그림 검수 결과 -->
+    <div class="sheet-approval" id="artqaApproval" hidden>
+      <div class="sheet-approval-head">
+        <h3>그림 검수 결과를 확인해 주세요</h3>
+        <p>장 4개를 검수했습니다. 1개는 다시 그려서 고쳤습니다. 1개는 못 고쳤습니다.</p>
+      </div>
+      <div class="qa-groups">
+        <div class="qa-group">
+          <h4>다시 그려도 못 고친 것</h4>
+          <p class="qa-group-lede">
+            여기 있는 장은 <b>그대로 완성본에 들어갑니다.</b> 마음에 안 들면 다음
+            화면에서 장을 골라 직접 다시 그려 주세요.
+          </p>
+          <ul class="qa-list">
+            <li><b>3장</b> <span class="qa-rounds">2번 다시 그림</span>
+              <ul class="qa-issues"><li>왼손 손가락이 여섯 개로 그려짐</li></ul></li>
+          </ul>
+        </div>
+        <div class="qa-group">
+          <h4>검수가 잡아서 다시 그린 것</h4>
+          <p class="qa-group-lede">아래 장은 처음 그린 것이 서술과 달라서 다시
+            그리게 했고, 지금은 통과한 것입니다. 손대실 것은 없습니다.</p>
+          <ul class="qa-list">
+            <li><b>1장</b> <span class="qa-rounds">1번 다시 그려서 통과</span></li>
+          </ul>
+        </div>
+      </div>
+      <div class="sheet-approval-actions">
+        <button type="button" class="btn btn-primary">확인했습니다 — 완성하기</button>
+      </div>
+    </div>
+
+    <!-- 5~7 · new_harness(/nh) 검수 화면.
+         위 네 개는 본편(index.html) 것이고, 아래 셋은 실험 파이프라인의
+         검수 화면이다 — 둘은 생김새가 다르다(본편은 팝업, /nh 는 화면
+         안에 박히는 패널). 여기서는 둘 다 팝업 안에 넣어 보여준다.
+         마크업은 손으로 베끼지 않는다 — nh-review.js 가 실제 화면과
+         같은 함수로 그리고, nh-review.css 도 같은 파일을 읽는다. -->
+    <div class="nh-approval" id="nhPicker" hidden>
+      <div class="nh-picker-head">
+        <h2>어느 방향으로 갈까요?</h2>
+        <p class="nh-hint">넷 중 하나를 고릅니다. 장면은 접혀 있고, 눌러야 펼쳐집니다.</p>
+      </div>
+      <div id="nhCards"></div>
+      <div class="nh-approval-actions" id="nhPickActions" hidden>
+        <button type="button" class="btn btn-quiet" id="nhPickAgain">다시 고르기</button>
+        <button type="button" class="btn btn-primary" id="nhPickGo">이대로 진행하기</button>
+      </div>
+    </div>
+
+    <div class="nh-approval" id="nhBoard" hidden>
+      <h2>고른 이야기를 확인해 주세요</h2>
+      <p class="nh-hint">여기서 정한 대로 그림이 나옵니다. <span id="nhBoardCount"></span></p>
+      <div class="nh-cast" id="nhBoardCast"></div>
+      <div id="nhBoardScenes"></div>
+      <div class="nh-approval-actions">
+        <button type="button" id="nhBoardRetry" class="btn btn-quiet">다시 만들기</button>
+        <button type="button" class="btn btn-primary">이대로 진행</button>
+      </div>
+    </div>
+
+    <div class="nh-approval" id="nhSheet" hidden>
+      <h2>캐릭터 시트를 확인해 주세요</h2>
+      <p class="nh-hint">이제부터 모든 페이지가 이 얼굴을 따라갑니다.</p>
+      <img class="nh-sheet-img" src="/static/demo/sheet_sample.jpg" alt="캐릭터 시트">
+      <div class="nh-approval-actions">
+        <button type="button" id="nhSheetRetry" class="btn btn-quiet">다시 만들기</button>
+        <button type="button" class="btn btn-primary">이대로 진행</button>
+      </div>
+    </div>
+
+    <p class="demo-hint">시연 화면입니다 — 바깥을 누르면 닫힙니다. 단추는 동작하지 않습니다.</p>
+  </div>
+</div>
+
+<script>
+(() => {
+  const veil = document.getElementById("approvalModal");
+  const panels = ["sheetApproval","storyApproval","boardApproval","artqaApproval",
+                  "nhPicker","nhBoard","nhSheet"];
+  const show = id => {
+    panels.forEach(p => document.getElementById(p).hidden = (p !== id));
+    veil.hidden = !id;
+    veil.classList.toggle("nh-wide", id.startsWith("nh"));
+  };
+  document.querySelectorAll(".demo-approvals-bar [data-demo]").forEach(b =>
+    b.addEventListener("click", () => show(b.dataset.demo)));
+  // 본편과 달리 시연은 바깥을 눌러 닫는다 — 여기서 멈출 파이프라인이 없다.
+  veil.addEventListener("click", e => { if (e.target === veil) show(""); });
+  // /nh 검수 화면의 가짜 자료. 실제로 돌려 나온 결과(로맨스 판타지,
+  // 방향 4 "반복된 아침")에서 모양만 줄여 옮긴 것이라, 칸 구성과 길이가
+  // 실제와 같다 — 짧게 지어내면 화면이 실제보다 헐거워 보인다.
+  const NH_DIRECTIONS = [
+    { n: 1, title: "검은 머리, 비의 궁에 다시 서다", genre: "로맨스 판타지",
+      plot: "궁 안으로 조용히 복귀한 하은은, 그리웠으면서도 피하고 싶었던 옛 연인과 다시 마주한다. 변명도 고백도 없이 일에 몰두하며 거리를 두려 하지만, 왕궁 곳곳에 남아 있는 자신의 흔적과 마주친다.",
+      scenes: ["궁정 서고로 복귀하며 옛 동료들의 환영과 미묘한 시선을 받는다.",
+               "인수인계를 받다 자신의 이름이 빠진 명령서와, 예전 약속이 적힌 쪽지를 발견한다.",
+               "쪽지를 들고 정원으로 나갔다가 옛 연인과 스쳐 지나간다.",
+               "밤에 혼자 남아 \"이미 잊었다\"고 중얼이지만, 쪽지를 찢지 못하고 품에 넣는다."] },
+    { n: 2, title: "연회장의 꽃, 두 명의 승자", genre: "로맨스 판타지",
+      plot: "조용히 있고 싶은 하은은 사교 연회장에서 매번 부딪히는 라이벌과 또다시 주목을 받는다. 신경전은 내기에서 절정에 달하지만, 예상치 못한 사건으로 분위기가 급변한다.",
+      scenes: ["라이벌이 일부러 다가와 옷차림을 지적하며 말다툼이 시작된다.",
+               "커플 선발 내기에 끌려가 서로 다른 파트너를 골라 신경전을 벌인다.",
+               "마탑주가 나타나 무대를 얼려버려 내기가 중단된다.",
+               "둘이 협력해 얼어붙은 출입구를 함께 연다.",
+               "\"오늘만은 없던 일로 하자\"고 말하지만, 서로를 의식하며 헤어진다."] },
+    { n: 3, title: "대공 저택의 새로운 규칙", genre: "로맨스 판타지",
+      plot: "계약 약혼녀가 된 하은은 폐허가 된 저택을 재정비하며 달라진 자신의 위치에 적응하려 애쓴다. 이전의 방식이 더는 통하지 않음을 느끼던 중, 약혼자와 인연이 있던 청년이 저택을 찾아온다.",
+      scenes: ["재건 중인 저택에서 새 규칙을 상의하지만 기존 하인들이 말을 듣지 않는다.",
+               "대공과 과거 인연이 깊었던 청년이 방문해 도움을 청한다.",
+               "자신의 방식대로 해결하려 하지만 두 사람의 제안이 충돌한다.",
+               "두 사람의 의견을 조율하며 새로운 해결책을 제안한다."] },
+    { n: 4, title: "반복된 아침, 마법사의 외딴방", genre: "로맨스 판타지",
+      plot: "마법사의 하녀로 살아가는 하은은 매일 같은 아침이 반복된다는 사실을 자신만이 눈치챈다. 벗어나려 하지만, 그녀를 감시하듯 신경 쓰는 마법사와의 대화가 수상하게 이어진다.",
+      scenes: ["같은 시간에 일어나 같은 아침을 준비하고, 마법사가 조금씩 다른 질문을 던진다.",
+               "청소 중 마법 진서에서 흔적이 남아 있지 않은 날짜를 목격한다.",
+               "일부러 평소와 다른 행동을 하자 마법사가 유심히 바라본다.",
+               "아침식사에 일부러 재료를 바꿔 넣자 마법사의 태도가 잠깐 흔들린다.",
+               "그날 밤, 이틀 전에는 없던 작은 등불이 켜진 것을 본다."] },
+  ];
+  // 2026-09-02부터 실제 화면도 콘티·컷 대본 없이(이어그리기) 이 모양으로만
+  // 검수한다 — direction_summary() 와 같은 모양(engine:"direction", 컷 없이
+  // 장면 요약만). NH_DIRECTIONS[3](4번 "반복된 아침")을 고른 뒤의 화면이다.
+  const NH_BOARD = {
+    engine: "direction",
+    cast: [
+      { name: "마법사", appearance: "30대 후반 남성, 은빛 머리, 연녹색 눈동자, 얇은 마법 로브, 손가락에 은반지." },
+    ],
+    scenes: NH_DIRECTIONS[3].scenes.map((s, i) => ({ id: i + 1, summary: s })),
+  };
+  document.getElementById("nhCards").innerHTML = NH_DIRECTIONS.map(d =>
+    `<div class="nh-card" data-n="${d.n}">${NHReview.directionCardHtml(d)}</div>`).join("");
+  NHReview.fillBoard(NH_BOARD, {
+    cast: "#nhBoardCast", count: "#nhBoardCount", scenes: "#nhBoardScenes" });
+
+  // 방향 카드 선택 — 시연이라 실제 요청은 안 나간다. 실제 화면과 같은
+  // 상호작용(고르면 "다시 고르기"/"이대로 진행하기"가 뜬다)만 보여준다.
+  const nhPickActions = document.getElementById("nhPickActions");
+  document.querySelectorAll("#nhCards .nh-card").forEach(card => {
+    const toggle = card.querySelector("details");
+    if (toggle) toggle.addEventListener("click", e => e.stopPropagation());
+    card.addEventListener("click", () => {
+      document.querySelectorAll("#nhCards .nh-card").forEach(c => c.classList.remove("picked"));
+      card.classList.add("picked");
+      nhPickActions.hidden = false;
+    });
+  });
+  document.getElementById("nhPickAgain").addEventListener("click", () => {
+    document.querySelectorAll("#nhCards .nh-card").forEach(c => c.classList.remove("picked"));
+    nhPickActions.hidden = true;
+  });
+  document.getElementById("nhPickGo").addEventListener("click", () => show(""));
+
+  // "다시 만들기" — 시연이라 실제로 아무 요청도 안 나간다. alert() 는 안
+  // 쓴다(네이티브 다이얼로그는 자동화 도구·일부 브라우저에서 화면을 통째로
+  // 멈춘다) — 대신 같은 자리에 잠깐 문구를 띄운다.
+  function demoRetryNote(kind, note) {
+    const box = document.querySelector(".demo-hint");
+    if (!box) return;
+    const original = box.textContent;
+    box.textContent = `실제로는 이 내용으로 ${kind}를 다시 만듭니다`
+      + (note.trim() ? `: "${note.trim()}"` : " (빈 채로도 다시 만들 수 있습니다).");
+    setTimeout(() => { box.textContent = original; show(""); }, 1600);
+  }
+  NHReview.wireRetryNote("nhBoardRetry", note => demoRetryNote("이야기 후보", note));
+  NHReview.wireRetryNote("nhSheetRetry", note => demoRetryNote("캐릭터 시트", note));
+
+  // 피드백 칩도 눌리는 감은 나게 (전송은 없음)
+  document.querySelectorAll("#approvalModal .fb-tag").forEach(b =>
+    b.addEventListener("click", () => b.setAttribute("aria-pressed",
+      b.getAttribute("aria-pressed") === "true" ? "false" : "true")));
+})();
+</script>
+
+</body>
+</html>

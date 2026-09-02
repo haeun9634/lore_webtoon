@@ -1,0 +1,2397 @@
+# =============================================================================
+# 웹툰 컷 이미지 생성 하네스 설정
+# 코드를 고치지 않고 이 파일만 바꿔서 재실행하세요.
+#
+# 모델 이름과 API 키는 .env 에 있습니다 (GEMINI_API_KEY / GEMINI_TEXT_MODEL /
+# GEMINI_IMAGE_MODEL). 여기에는 실험 조건만 둡니다.
+# =============================================================================
+
+# 스토리 하네스 산출물 뿌리. --run-id 는 이 아래의 폴더 이름입니다.
+# webtoon-harness/ 기준 상대경로 — run.py의 load_config()가 절대경로로 변환한다.
+story_runs_root: "../story-harness/runs"
+
+# -----------------------------------------------------------------------------
+# 캐릭터 외형 — 예비 경로입니다.
+#
+# 기준은 story-harness 의 runs/<run_id>/p1.json 에 있는 appearance_en 입니다.
+# 그 값이 있으면 아래 값은 무시됩니다 (다르면 화면에 알립니다). 아래 값은
+# 시트가 없는 예전 run 을 위해 남겨 둔 것입니다. 둘 다 없으면 중단됩니다.
+#
+# 어느 쪽에서 왔든, 이 문구는 코드가 모든 프롬프트 맨 앞에 강제로 붙입니다.
+# LLM 은 여기에 손대지 못하며, 외형 단어를 새로 만들어도 lint 경고가 찍힙니다.
+#
+# p1.json 의 design_details / color_palette 도 프롬프트 끝에 강제로 붙습니다
+# (style_suffix 와 같은 방식). 턴어라운드 이미지 한 장은 "대충 이런 사람"까지는
+# 전하지만 "왼쪽 소매에만 노란 반사띠 두 줄"은 전하지 못하기 때문입니다.
+# -----------------------------------------------------------------------------
+character_appearance: ""
+
+# 성별 — p1.json 에 gender 가 없을 때 쓰는 예비 경로입니다 (male | female | 자유 문구).
+# appearance_en 에 성별을 가리키는 단어가 하나도 없으면 이미지 모델이 컷마다
+# 알아서 정합니다. 비워 두고 그런 상황이 되면 실행할 때 경고가 뜹니다.
+#
+# 주의: 이 값은 run 마다 다릅니다(주인공이 다르니까). 여기 적어 두면 다른 run 을
+# 돌릴 때 틀린 성별이 붙습니다. story-harness 가 p1.json 에 gender 를 남기게 되면
+# 이 줄은 비우세요 — p1.json 이 있으면 그쪽이 이깁니다.
+character_gender: ""
+
+# -----------------------------------------------------------------------------
+# 기본 의상 — 컷마다 옷이 바뀌는 것을 막습니다.
+#
+# p1.json 의 appearance_en 은 사진 여러 장에서 읽어 만들어집니다. 사진마다 옷이
+# 다르면 "usually seen in A, B, C, or D" 처럼 **여러 벌을 나열**하게 되고, 그
+# 문장이 모든 프롬프트 맨 앞에 강제로 붙습니다. 코드가 컷마다 "이 넷 중
+# 아무거나"라고 말하는 셈이라 옷이 매번 바뀝니다. 실제로 그렇게 나왔습니다.
+#
+# 여기에 **한 벌만** 적으면 코드가 프롬프트 끝에 이렇게 박습니다:
+#   "DEFAULT OUTFIT — the main character wears exactly this in every panel: …
+#    The appearance line above may list several outfits …; ignore that variety.
+#    Change the outfit ONLY when the panel description explicitly says she has
+#    changed clothes."
+#
+# 같은 자리(design_lock)에 들어가는 design_details 는 실제로 지켜지는 것이
+# 확인됐습니다 — 피어싱과 목걸이는 컷마다 유지됐고 옷만 흔들렸습니다.
+#
+# 비워 두면 고정하지 않습니다 (실행할 때 경고가 뜹니다).
+# 이 값도 run 마다 다릅니다 — 주인공이 바뀌면 반드시 고쳐 쓰세요.
+# 영어로 적으세요. 프롬프트에 그대로 들어갑니다.
+# -----------------------------------------------------------------------------
+# ★ 선화(monochrome_styles) 로 돌 때는 여기에 **색 이름을 적지 마세요.** 이 문구는
+#   {style} 뒤에 그대로 붙고, 뒤에 온 것이 이깁니다. 팔레트는 코드가 명도로
+#   바꿔치기하지만(charsheet.ink_palette) 이 칸은 자유 서술이라 손대지 못합니다.
+#   실제로 "deep red inner collar / swirling red emblem" 이라고 적혀 있던 동안,
+#   눈만 색으로 남기기로 해 놓고도 깃과 문양이 붉게 나왔습니다.
+#   색 대신 **명도와 모양**으로 적으세요 (darker / lighter / contrasting).
+outfit_lock: ""
+
+# -----------------------------------------------------------------------------
+# 등신 비율 — 실사용자 지적으로 새로 만든 축 (2026-08)
+# -----------------------------------------------------------------------------
+# "SD 로 넣은 캐릭터가 웹툰에서는 LD 로 출력된다."
+# 그리고 팀과 사용자가 쓰는 낱말이 서로 어긋나 있었습니다. 사용자 기준:
+#
+#   sd   머리 비중이 매우 크다 (2~3등신)
+#   md   중간 등신 (4~5등신)
+#   ld   실제 등신 (7~8등신)
+#
+# ★ 아래 styles 의 그림체들은 전부 PROPORTION 줄에 성인 등신(7~9등신)을 박아
+#   두었습니다. 이 값을 채우면 프롬프트 **뒤쪽**에 덮어쓰는 문구가 붙습니다
+#   (scenegen.HEAD_RATIO) — 뒤에 온 것이 이깁니다. styles 문구는 안 건드립니다.
+# ★ **render_style 의 sd 와 다른 것입니다.** 그건 컷 하나를 코미디용 2~3등신
+#   삽입 컷으로 그리라는 뜻이고(styles.<이름>.sd), 이건 화 전체의 캐릭터 등신
+#   비율입니다. 키 이름이 달라서 헷갈릴 자리는 없지만, 값이 같은 글자라
+#   여기 적어 둡니다.
+# ★ 비워 두면 그림체가 정한 기본 등신 그대로입니다 (예전 run 과 동일).
+head_ratio: ""            # "" | sd | md | ld
+
+# 스티커 평면화 — 실사용자 지적: "스티커가 3D 느낌이 강해 그림체와 안 맞는다."
+# 여기서 스티커는 그림 안에 그려지는 작은 장식입니다 (땀방울·하트·별·물음표·
+# 뭉게구름). 이미지 모델은 아무 말이 없으면 이것들을 그라데이션과 드롭섀도로
+# 입체로 그려서, 만화 그림 위에 3D 이모지를 얹은 것처럼 보입니다.
+# 켜면 "같은 손이 같은 잉크로 그린 평면"이라는 문구가 프롬프트 뒤에 붙습니다.
+flat_stickers: false
+
+# 포즈 지시 — 실사용자 지적: "'이 검 엄청 가벼워요' 컷의 포즈가 어색하다."
+# 포즈는 지금까지 코드가 한 마디도 안 하는 자리였습니다 (거리·구도·시선은 절이
+# 있는데 몸이 어떻게 서 있는지는 없었습니다). 켜면 무게중심·팔의 목적·물건의
+# 무게가 손목 각도에 드러나야 한다는 문구가 패널마다 붙고, 정면으로 뻣뻣하게
+# 선 "캐릭터 선택 화면" 자세를 금지합니다. 인서트(사물) 컷에는 안 붙습니다.
+pose_guidance: false
+
+# 배경 이어짐(세로 리빌) — 실사용자 지적: "컷은 나오는데 웹툰이 아니라 만화
+# 여덟 칸을 세로로 잘라 놓은 것 같다."
+#
+# 세로 스크롤이 만화와 다른 지점은 여백만이 아닙니다. 붙여 놓은 두 컷이 서로
+# 무관한 그림이면 붙여도 나열입니다. 웹툰에서만 되는 연출은 **무대는 그대로 두고
+# 카메라만 아래로 내리는 것** — 탑을 올려다보다 내려오고, 떨어지는 인물을 따라가고,
+# 방 안을 위에서 아래로 훑는 컷들입니다. 그러면 두 컷이 "한 공간의 위와 아래"로
+# 읽혀서, 스크롤 자체가 카메라가 됩니다.
+#
+# 어디가 그 자리인지는 콘티(story-harness 의 derive_layout)가 이미 계산해서
+# 컷마다 vertical_link 로 보내 옵니다 (여백 0 · 같은 zone · 데포르메 아님).
+# 여기를 켜면 그 컷의 프롬프트 뒤에 "같은 장소를 조금 아래에서 본 것" 문구가
+# 붙습니다 (run.LINK_CUT_CLAUSE).
+#
+# ⚠️ **직전 컷이 첨부되는 조건에서만 뜻이 있습니다** (S+ · D — use_previous_cut).
+#    붙일 그림이 없으면 모델은 무엇에 이어 붙일지 모릅니다. 첨부가 없는 조건
+#    (A · S)에서는 이 값을 켜도 아무 문구도 안 붙습니다.
+# 비우면(기본) 아무 문구도 안 붙습니다 — 예전 run 과 프롬프트가 같습니다.
+vertical_link: false
+
+# 장르 — 톤의 상한을 정하는 데만 씁니다 (scenegen.genre_tone_guard).
+# 실사용자 지적: 로맨스 판타지를 골랐는데 "덫에 걸린 생쥐" 장면이 피 묻은 덫과
+# 새빨간 조명의 공포 연출로 나왔습니다. 그림 단계가 **소재만 보고 톤을 정하기**
+# 때문입니다 — 덫·숲·밤이라는 낱말만 있으면 모델은 가장 극적인 그림(공포)으로
+# 갑니다. 장르는 이 파이프라인에 한 번도 전달된 적이 없었습니다.
+# 스릴러·공포·오컬트 같은 어두운 계열이면 상한을 안 겁니다. 비우면 아무 문구도
+# 안 붙습니다 (예전 run 과 동일). landing 은 사용자가 고른 장르를 여기 채웁니다.
+genre: ""
+
+# -----------------------------------------------------------------------------
+# 그림체 — 이름 붙여 등록해 두고 --style <이름> 으로 고릅니다.
+#
+#   python run.py ... --style webtoon    # 일반 웹툰 (네이버 웹툰 풍)
+#   python run.py ... --style romance    # 로판 표지 일러스트 풍 (장식으로 화려)
+#   python run.py ... --style cinematic  # 고퀄 웹툰 + 시네마틱 반실사 (빛으로 화려)
+#   python run.py ... --style lineart    # 선화 (선과 여백으로 읽힌다 · 액션용)
+#   python run.py ... --style pastel     # 일상툰 감성체 (덜 완성돼 보이는 것이 스타일)
+#   python run.py ... --style noir       # 다크 느와르 (검은 덩어리와 뭉개진 명암)
+#   python run.py ... --style shoujo     # 순정만화 / BL풍 (선·스크린톤·여백)
+#   python run.py ... --style frost      # 차가운 로판 (머리·속눈썹 밀도 · 셀 셰이딩)
+#
+# 이름은 **그림체 낱말**로만 짓습니다. story-harness/samples 의 장르 이름
+# (romance · idol · hunter · academy · fantasy · daily · martial · action ·
+#  thriller · comedy · sentinel · omegaverse · gamefantasy)과 겹치면 "romance"
+# 처럼 그림체인지 장르인지 알 수 없게 됩니다 — romance 는 이미 겹쳤고, 그건
+# 남겨 둔 빚입니다. 새로 만들 때는 겹치지 마세요.
+#
+# 고른 값이 그대로 style_suffix 가 되어 모든 프롬프트에 코드가 강제로 붙습니다.
+# story-harness 의 --charsheet 도 같은 값을 읽으므로, 시트를 뽑을 때와 컷을 뽑을
+# 때 **같은 이름**을 쓰세요. 다르면 실행할 때 경고가 뜹니다 (meta.json 대조).
+#
+# 조건 비교 도중에 style 을 바꾸면 이전 실험과의 비교가 깨집니다. 비교하려면
+# 같은 화를 두 style 로 각각 뽑아 --style-lock 으로 나란히 보세요.
+# -----------------------------------------------------------------------------
+# story-harness 에는 --style 이 없습니다. `--charsheet` 는 **이 값**을 읽어
+# 시트를 그립니다. 그러니 시트를 뽑기 전에 이 값을 그 화에 쓸 그림체로 맞추고,
+# 컷도 같은 이름으로 뽑으세요 (webtoon-harness 는 --style 로 덮을 수 있습니다).
+# 어긋나면 시트와 컷이 서로 다른 그림체를 가리킵니다.
+style_default: lineart
+
+# 선화(무채색) 그림체. 여기에 적힌 그림체로 돌면 코드가 세 가지를 바꿉니다:
+#   1. design_lock 의 컬러 팔레트를 hex 대신 **명도 지시**로 바꿉니다
+#      (charsheet.ink_palette — #A03A3A -> "dense cross-hatching")
+#   2. scene_gen 에게 패널 서술에 색 낱말을 쓰지 말라고 알립니다
+#   3. 프롬프트 **맨 끝**에 무채색 지시를 박습니다 (scenegen.mono_tail)
+#
+# 왜 그림체 문구만으로는 안 되는가: 그림체는 프롬프트 중간에 들어가고, 그 뒤로
+# 조건 extra·조연·의상·머리·팔레트가 따라옵니다. 모델은 마지막에 읽은 것을 더
+# 잘 지키므로, 뒤에서 "accent: rose pink (#E25B7E)" 를 보면 분홍 꽃잎을 그립니다.
+# 실제로 그렇게 나왔습니다 — 선화는 맞는데 깃과 꽃잎에 색이 남았습니다.
+#
+# ── 스팟 컬러 ──────────────────────────────────────────────────────────────
+# 값에 팔레트 항목 이름을 적으면 **그 항목만 색으로 남습니다.** 나머지는 먹으로
+# 바뀝니다. 선화에서 색이 딱 하나뿐이면 그 자리가 화면에서 가장 먼저 읽히므로,
+# 전면 컬러보다 오히려 셉니다 — 붉은 눈이 그런 자리입니다.
+#
+# 항목 이름은 p1.json 의 color_palette 키를 그대로 씁니다:
+#   hair · eyes · skin · outfit_main · outfit_sub · accent
+#
+# 빈 목록([])이면 완전 무채색입니다. 목록 형태(- lineart)로 적어도 됩니다 —
+# 그때는 스팟 컬러 없이 전부 흑백으로 돕니다.
+# 청명: 붉은 눈 + 붉은 안깃 + 왼가슴 붉은 문양. 검은 도복과 흰 여백 위에서 이
+# 셋만 붉으면 화산파의 색이 그대로 남으면서 선화의 힘도 안 죽는다.
+# (p1.json 의 appearance_en·design_details 도 "deep red inner collar" 라고 말하고
+#  있어서, 눈만 남기려면 그쪽 서술부터 고쳐야 한다 — 그건 캐릭터의 진짜 디자인이라
+#  건드리지 않고 여기서 의도된 것으로 선언한다.)
+monochrome_styles:
+  lineart: [eyes, outfit_sub, accent]
+  # ★ pastel · noir · shoujo 는 색이 적지만 **일부러 여기 넣지 않았습니다.**
+  #   이 훅의 마지막 못은 "BLACK INK ON WHITE PAPER … inked line art" 입니다
+  #   (scenegen.MONO_TAIL). 그건 lineart 를 위해 쓴 문장이라:
+  #     · pastel  — 정체인 바랜 파스텔이 통째로 지워집니다
+  #     · noir    — 검은 덩어리가 흰 종이 선화로 뒤집힙니다 (정반대입니다)
+  #     · shoujo  — 남겨 둔 한 자리의 강조색까지 먹으로 바뀝니다
+  #   셋 다 채도를 죽이는 일은 각자의 style 문구가 직접 합니다.
+
+# ---------------------------------------------------------------------------
+# 그림체 계약 (2026-08-27 신설, 기본은 v1 = 예전 그대로)
+#
+# 문제: 그림체들이 **"실사냐 아니냐"를 축으로 갈려 있었습니다.** cinematic 은
+# 정의부터 "semi-realistic rendering / photographed on a real set / depth of
+# field / film grain" 이라 실사를 요구했고, webtoon 은 평면을 요구했습니다.
+# 그래서 사용자가 "웹툰인데 왜 실사냐" 고 물으면 답이 "그건 cinematic 이라
+# 원래 실사입니다" 가 되어 버렸습니다 — 제품에서 두 그림체를 나란히 파는데
+# 고르는 사람 눈에는 "하나는 평면, 하나는 덜 평면" 으로만 보입니다.
+#
+# 고친 축:
+#   **비실사는 모든 그림체의 전제**입니다 (style_common). 그림체를 가르는 것은
+#   렌더링이 아니라 **연출**입니다 — webtoon 은 가독성, cinematic 은 카메라.
+#
+# v1 을 지우지 않는 이유: 예전 run 을 다시 돌리면 프롬프트가 그대로여야 합니다
+# (harness-is-final). style_contract 가 v1 이면 styles 만 읽고 아래 두 값은
+# 통째로 무시되므로, 옛 run 은 한 글자도 안 바뀝니다.
+style_contract: v2        # v1 = 예전 그대로 | v2 = style_common + styles_v2
+
+# v2 에서 **모든** 그림체 앞에 붙는 공통 계약. 그림체별 문구가 이것과 부딪히면
+# 그림체 쪽이 이깁니다(뒤에 오므로) — 그래서 v2 로 쓸 그림체 문구에서는 실사를
+# 부르는 낱말을 빼 두어야 합니다.
+style_common: >-
+  THIS IS A DRAWN COMIC PANEL. Every style below differs in STAGING — where the
+  camera is, how the panel is composed, how loud it is — and never in whether it
+  is drawn. Drawn is the floor, not a style choice.
+  NOT PHOTOREALISTIC. Not a photograph, not a film still, not a 3D render, not a
+  matte painting, not concept art. If the result could be mistaken for a
+  photograph of a real place, it is wrong regardless of how good it looks.
+  LINEWORK IS VISIBLE. Figures and significant objects carry a drawn outline and
+  stay closed and readable. Never let a form be defined purely by photographic
+  light and texture with no drawing underneath.
+  SURFACES ARE PAINTED OR DRAWN, NEVER PHOTOGRAPHED. No photographic texture, no
+  scanned grain, no procedural noise, no 3D-rendered material. HOW MUCH detail a
+  surface carries is decided by the style below — some styles paint the world in
+  freely, others flatten it to colour fields — but in every one of them the
+  surface was made by a hand, not a camera.
+  NO CAMERA ARTEFACTS. No lens flare, no bloom, no depth-of-field blur, no bokeh,
+  no chromatic aberration, no film grain, no HDR glare, no volumetric dust or
+  haze hanging in the air. Distance is shown by flattening far shapes to a paler
+  flat tone in one step, never by a continuous photographic fade.
+  THE SHOT DESCRIPTION IS MOOD, NOT A RENDER ORDER. It is written in film
+  language ("golden hour", "dust hangs in the air", "shimmering water",
+  "atmospheric"). Those say how the moment should FEEL. Translate them into flat
+  shapes, hard-edged tones and strong silhouettes — never render them literally.
+
+# v2 에서 그림체 문구를 덮어씁니다. 여기 없는 그림체는 styles 의 것을 그대로
+# 씁니다 — 한 번에 일곱 개를 다시 쓰지 않아도 되게 한 자리입니다.
+styles_v2:
+  # 읽는 속도가 전부입니다. 카메라는 조용하고 인물이 큽니다.
+  webtoon:
+    normal: >-
+      Korean webtoon (네이버 웹툰) — an ordinary weekly serialised panel, built to
+      be read in one second while scrolling on a phone.
+      STAGING: the character is LARGE in frame and unmistakably the subject.
+      Ordinary eye-level framing, straight-on or gently angled. One clear action
+      or one clear expression per panel — if a reader cannot say what happened
+      here in three words, the staging is wrong. No extreme perspective, no
+      dramatic tilt, no showy camera.
+      BACKGROUND IS SUPPORTING INFORMATION, NOT A PICTURE OF ITS OWN. It exists
+      to tell the reader WHERE they are in one glance, and then to get out of the
+      way. It is not an illustration of a place.
+      DETAIL BUDGET IS RELATIVE, AND THE CHARACTER SETS IT. The background gets
+      FAR less drawn detail than the character — think a quarter of it. The
+      character is always the most detailed, most contrasted and most saturated
+      thing in the panel; if a reader's eye lands anywhere else first, the
+      background is overdrawn. When in doubt, draw less.
+      HOW TO DRAW BACKGROUND OBJECTS — big shapes, not inventories:
+        · A building is a flat silhouette plus a few windows plus one flat wall
+          tone. NOT bricks, NOT panel seams, NOT wall texture, NOT every window.
+        · A road or floor is one wide flat colour field plus a handful of thick
+          drawn lines. NOT a field of cracks, NOT scattered pebbles, NOT
+          reflections.
+        · Rubble, foliage, pipes, cables, girders: a few bold silhouettes
+          standing in for the whole mass. Never draw the whole tangle.
+        · Anything far away is a FLAT SHAPE ONLY — a silhouette in one paler
+          tone, with no interior detail at all. Distant buildings get no windows,
+          no structure, no texture.
+      COUNT LIMIT: a handful of background elements, not a set dressing list. If
+      the shot description names more, keep the ones the story needs and drop the
+      rest. Large areas of plain flat colour with nothing drawn on them are
+      correct, and are what makes the panel read as a webtoon.
+      COLOUR: cel shading. One flat base tone per area, one shadow tone, at most
+      one light tone, meeting at hard edges. Large areas of a single flat colour
+      are correct and expected.
+      FACE: stylised and simple. Large plainly drawn eyes, a flat iris with one
+      darker band, ONE main catchlight, a solid lash line. Nose a short stroke,
+      mouth a simple line. The eyebrows carry most of the expression.
+      COMIC FURNITURE: speech sits in a drawn bubble with an outline and a tail;
+      a shout gets a spiky burst, a thought gets a soft cloud with trailing
+      circles. Narration sits in a bordered caption box or on a clean flat band.
+      Korean sound effects are drawn display lettering. Motion and feeling come
+      from drawn marks — speed lines, focus lines, impact bursts, sweat drops.
+      Everyday commercial webtoon quality. Readable at a glance, never precious.
+
+  # 배경을 **그리되 뒤로 민다.** 웹툰처럼 평면으로 눌러 버리는 것이 아니라,
+  # 채도와 선명도를 낮춰 인물만 앞으로 튀어나오게 하는 쪽입니다.
+  cinematic:
+    normal: >-
+      Korean webtoon page staged like a film frame — the look of a premium
+      illustrated series. The background is genuinely PAINTED here, not flattened
+      to colour fields; what keeps it from reading as a photograph or as concept
+      art is that it is pushed BACK behind the character.
+      THE ONE RULE THAT MATTERS — SEPARATION. The character is sharp, clearly
+      outlined, cel-shaded and the most SATURATED thing on the page. The
+      background is softer, hazier and noticeably DESATURATED, drifting toward a
+      muted single-hue wash (amber-brown, dusk blue, cold grey). A reader's eye
+      must land on the character instantly, even though the background is richly
+      painted. If the background is as sharp and as colourful as the character,
+      the panel has failed and reads as concept art.
+      BACKGROUND: painted with real depth and atmosphere — layered trees, mist
+      between the trunks, drifting leaves, shafts of light. Detail is allowed and
+      wanted, but it stays low-contrast and low-saturation, and the farther back
+      it sits the softer and paler it gets.
+      CHARACTER: drawn, never painted into the scenery. Clean outline, flat base
+      tone plus a soft shadow tone, expressive eyes with clear highlights. The
+      character keeps webtoon linework even while standing in a painted world —
+      that contrast IS this style.
+      STAGING: push the camera. Strong perspective, a low angle that makes
+      something tower or a high angle that makes the character small, the figure
+      set deep in the frame, foreground branches or rubble framing the shot so
+      the page has a near, a middle and a far.
+      LIGHT AS DRAMA: one strong directional key. Backlight, long shadows, a
+      bright haze behind a silhouette. Warm and cold can sit in one page (a cold
+      blue inset against a warm amber page) to mark a change of beat.
+      COMIC FURNITURE still applies, and it is what keeps this a webtoon:
+      bordered caption boxes, outlined speech bubbles with tails, soft cloud
+      thought bubbles, hand-drawn Korean sound effects placed into the scene,
+      small drawn motion strokes.
+      Painted world, drawn character, cinematic camera.
+
+styles:
+  # ---------------------------------------------------------------------------
+  # render_style 별로 **독립된 문구**입니다. 공통 문구 + 접미사 구조로는 셋이
+  # 결국 같은 그림체로 보였습니다. 한 화 안에서 작화 톤이 확실히 갈려야 하고,
+  # 인물이 컷마다 조금 달라 보여도 괜찮습니다 — 상업 웹툰도 정식 컷과 SD 컷의
+  # 인물은 서로 다른 사람처럼 보입니다.
+  #
+  # normal 문구가 그 style 의 대표값입니다 (캐릭터 시트 대조에 쓰입니다).
+  # ---------------------------------------------------------------------------
+
+  # 일반 웹툰. 매주 연재하는 그 그림 — 깔끔한 선, 셀 채색, 간결한 배경, 효과선.
+  # 화려함이 아니라 **읽히는 속도**가 기준입니다. romance 와 정반대 방향으로
+  # 밀어야 둘이 구분됩니다: 여기서 "덜 그린다"는 것이 스타일 그 자체입니다.
+  webtoon:
+    normal: >-
+      Korean webtoon (네이버 웹툰) art style — an ordinary weekly serialised story
+      panel, clean and instantly readable, NOT a cover illustration.
+      LINEWORK: clean confident lines of nearly uniform weight, fully closed
+      shapes, a slightly heavier contour around the figure and thinner lines for
+      interior detail. No sketchy hatching, no scribbled texture, no painterly
+      edges.
+      COLOUR: simple cel shading — one flat base tone per area plus a single soft
+      shadow tone, and at most one light tone. Colour areas meet at clear
+      boundaries. No elaborate gradient rendering, no airbrushed skin, no glow
+      layers, no texture overlays.
+      FACE: stylised and simple. The eyes are large and expressive but plainly
+      drawn: a flat iris colour with one darker band across the top, ONE main
+      white catchlight and at most one small secondary highlight, a simple solid
+      lash line rather than individually drawn lashes. The nose is a short stroke
+      or a small dot, the mouth a simple line. The eyebrows carry most of the
+      expression.
+      PROPORTION: adult figures are about seven to eight heads tall with correct
+      anatomy, real shoulder width and real hand size. Simple drawing does not
+      mean short — never chibi, never super-deformed, never a large head on a
+      small body, unless the panel is explicitly an SD panel.
+      HANDS: simplified but correctly built — four fingers and a thumb, right
+      length, right joints. A hand holding, pointing or reaching is often what
+      the panel is about, so do not hide hands behind backs or crop them away.
+      HAIR: a few large shaped clumps with one straight simple highlight band
+      across them — not strand-by-strand rendering.
+      BACKGROUND: kept simple — a plain colour or gradient field, a light
+      screen-tone pattern, or a sparsely drawn setting containing only the objects
+      the scene actually needs. The background never competes with the figure.
+      MOTION AND FEELING: carried by drawn effect marks rather than by rendering.
+      Use speed lines trailing a moving limb, radiating focus lines, small impact
+      bursts, sweat drops, shadow lines down the face, and simple emotion marks
+      freely — that is how this style shows movement and mood. They stay on top
+      of the drawing, though: they must never cover the figure, never fill the
+      whole panel, and never be the loudest thing in it. The pose reads first,
+      the effect marks second.
+      Everyday commercial webtoon quality, readable at a glance on a phone screen.
+      Not a painted illustration, not photorealistic, not a 3D render, not
+      ornately detailed.
+
+    sd: >-
+      Korean webtoon chibi / super-deformed (SD) comedy style. The figure is 2-3
+      heads tall with a head as large as the whole body. The face is reduced to
+      the simplest possible shapes: huge round eyes taking up most of the face
+      with a single big catchlight each, the nose a single dot or omitted
+      entirely, a tiny simple mouth, no jawline, no realistic anatomy anywhere.
+      Thick rough confident linework with obvious width variation. Flat colours
+      with no shading at all.
+      KEEP THE PLACE. The background stays the same location as the surrounding
+      panels — the same room, the same furniture, the same light — but drawn
+      loosely and flatly, with far less detail than a normal panel. Do NOT
+      replace it with a plain colour field: an SD panel is a joke told in the
+      same room, not a cut to a different world. Scatter small stars, sweat
+      drops and impact marks over it.
+      Bouncy, cute and comedic. Deliberately far simpler and rougher than a normal
+      panel — not detailed, not realistic.
+
+    emphasis: >-
+      Korean webtoon dramatic emphasis frame. The background is removed entirely
+      and replaced by hard radiating speed lines converging on the figure, with
+      coarse halftone dots in the darks. Very high contrast: one deeply saturated
+      accent colour against crushed black shadow, a hard rim light along the
+      silhouette, and noticeably heavier bolder linework than a normal panel. The
+      figure is isolated, cropped close and dominates the frame. No setting, no
+      scenery, no soft colour — this panel hits harder than everything around it.
+
+  # 로판(로맨스 판타지) 표지 일러스트 계열.
+  #
+  # 여기서는 과한 것이 맞습니다. "glossy detailed eyes" 정도의 문구로는 모델이
+  # 평범한 웹툰 얼굴을 그립니다 — 홍채를 몇 겹으로 쌓는지, 하이라이트를 몇 개
+  # 어디에 두는지, 머리카락 광택 띠가 몇 줄인지까지 적어야 그 그림이 나옵니다.
+  # 문구를 줄이지 마세요. 줄이면 곧바로 webtoon 쪽으로 되돌아갑니다.
+  #
+  # ★ 다만 "표지"라는 낱말은 걷어냈습니다. 예전 첫 문장이 COVER ILLUSTRATION 이고
+  #   "never at the quality of an ordinary story panel" 이었는데, 그러면 **모든
+  #   컷이 표지**가 됩니다 — 인물이 정면을 보고 서서 포즈를 잡고, 컷끼리 이어지지
+  #   않고, 이야기가 진행되지 않습니다. 같은 함정을 lineart 에서 실제로 밟았고,
+  #   나온 것은 웹툰 컷이 아니라 일러스트 한 장이었습니다.
+  #   렌더링 수준은 표지급으로 두되(그게 이 그림체의 정체입니다), 그리는 대상은
+  #   **한 화 안의 한 컷**입니다. 화려함은 렌더링에서 나오고 구도는 연출이 정합니다.
+  romance:
+    normal: >-
+      Korean romance-fantasy (로판) webtoon panel, rendered at COVER-ILLUSTRATION
+      quality — as ornate and as highly finished as the title illustration printed
+      on the book's cover, but composed as one panel of an ongoing episode that
+      continues above and below it. The rendering is cover-grade; the framing,
+      the pose and the moment are whatever this beat of the story needs. Do not
+      turn every panel into a portrait of someone standing and posing.
+      EYES — the most important element on the page, drawn like cut gemstones.
+      Enormous and wet-looking, taking up a large share of the face. Build each
+      iris in visible layers: a dark defining ring at the outer rim, a deep
+      saturated colour beneath it, a brighter luminous gradient rising from the
+      bottom of the iris, and fine radiating fibres drawn outward from the pupil
+      like the facets inside a jewel. On top of that put THREE OR FOUR SEPARATE
+      HIGHLIGHTS at different sizes and different depths — one large soft
+      catchlight at the upper edge, a small hard white specular dot beside it, a
+      faint glowing crescent of bounced light along the lower rim, and one or two
+      tiny sparkle points floating inside the iris. The eye must read as wet glass
+      with light trapped inside it. Long thick individually drawn upper lashes
+      flaring outward, a fine separate lower lash line, a soft coloured shadow
+      cast by the upper lid onto the top of the eye, a delicate highlight on the
+      aegyo-sal under the eye, and emphasised upswept outer corners.
+      FACE: the nose reduced to a small simplified stroke with a lit tip; a small
+      delicate mouth with a glossy highlight on the lower lip; a narrow pointed
+      chin, slim jaw and smooth high forehead.
+      PROPORTION — this genre has a specific ideal and it must be held. The head
+      is small and the body long: about eight to nine heads tall for adults, with
+      narrow shoulders on the women and a clear V-taper on the men, a high waist,
+      long legs and long slender necks. Never squat, never chibi outside an SD
+      panel, never a realistic short-legged build.
+      HANDS are drawn with care, never hidden or fudged: long tapering fingers,
+      visible knuckle and nail shapes, a soft highlight along the top of the
+      hand. In this genre a hand reaching, hesitating or held is often the whole
+      point of the panel, so give hands the same finish as the face.
+      EXPRESSION is restrained, not broad. The feeling is carried by the eyes,
+      the eyebrows and the smallest change at the mouth — a slightly parted lip,
+      a lowered lash line, a gaze cutting sideways. Avoid loud comic expressions,
+      shouting mouths and cartoon sweat drops in a normal panel; the tension of
+      this genre lives in what is held back.
+      TWO CHARACTERS IN FRAME — the distance between them is the subject. Make it
+      explicit and readable: how much air is between their bodies, whose eyes are
+      on whom, whose hand is nearer. When they are close, use the near figure's
+      shoulder, hair or sleeve to frame the far one, and light the gap between
+      them so the reader feels it.
+      HAIR: never a solid blunt mass. Draw many separated flowing strands, with
+      fine loose hairs breaking away at the edges and catching the light. Across
+      the mass run SEVERAL DISTINCT GLOSSY HIGHLIGHT BANDS — a bright ring near
+      the crown plus softer secondary bands lower down — over a colour gradient
+      running from a deeper tone at the roots to a luminous almost translucent
+      tone at the tips.
+      SKIN: luminous and translucent, as though light passes through it. Warm pink
+      blush across the cheeks, over the bridge of the nose, on the tips of the
+      ears and at the fingertips, with a soft sheen on the forehead, nose and
+      cheekbones and glowing subsurface light where the light rakes across.
+      COSTUME: draw every ornament individually and simplify nothing — layered
+      lace trim, embroidery, beading, tiny buttons, ribbons, chains, set gemstones,
+      metal filigree, and the pattern woven into the fabric itself. Render fabrics
+      by material: silk with a sharp specular sheen, chiffon translucent, velvet
+      deep and matte, metal and jewels with hard reflections and refracted light.
+      BACKGROUND: never plain. Fill it with roses and drifting petals, blooming
+      light and lens bokeh, floating sparkles and light particles, gold-foil
+      filigree and ornamental flourishes, and soft chromatic bleed at the edges of
+      the light. Light blooms from behind the figure and rim-lights the silhouette
+      and the hair.
+      LINEWORK: thin and delicate but strongly modulated — each stroke swells and
+      then tapers to a point, never uniform, never stiff. Line colour shifts
+      toward the local colour instead of staying flat black.
+      COLOUR: rich pastels with highly saturated accents, soft airy gradient
+      shading, glowing bright key light. Keep one dominant colour chord per panel,
+      taken from that scene's own light — whatever the hour and weather actually
+      are — so consecutive panels of the same scene read as the same moment in the
+      same place. Let the costume's accent colour be the most saturated thing in
+      frame.
+      Overdone is correct here: if the result looks restrained or economical, it is
+      wrong. Not photorealistic, not a western realistic illustration, not a 3D
+      render, not a rough sketch, not a plain webtoon panel, and not a
+      self-contained cover with the figure posed at the centre.
+
+    sd: >-
+      Korean webtoon chibi / super-deformed (SD) comedy style. The figure is 2-3
+      heads tall with a head as large as the whole body. The face is reduced to the
+      simplest possible shapes: huge round glossy eyes taking up most of the face,
+      the nose a single dot or omitted entirely, a tiny simple mouth, no jawline,
+      no realistic anatomy anywhere. Thick rough confident linework with obvious
+      width variation. Flat pastel colours, no gradient rendering. The background
+      is a plain soft pastel wash with no setting or detail, scattered with small
+      stars, hearts and sparkle marks. Bouncy, cute and comedic. Deliberately far
+      simpler and rougher than a normal panel — none of the cover-illustration
+      rendering, no layered iris, no ornament detail. Not detailed, not realistic.
+
+    emphasis: >-
+      Korean webtoon dramatic emphasis frame in a romance-fantasy book. The
+      background is removed entirely and replaced by radiating focus lines
+      converging on the figure, with scattered light particles caught in them.
+      Very high contrast: a deeply saturated accent colour against crushed shadow,
+      a hard rim light burning along the silhouette and through the hair, heavier
+      and bolder linework than a normal panel. The eyes keep their layered
+      jewel-like highlights and catch the light hardest of anything in frame. The
+      figure is isolated, cropped close and dominates the frame. No setting, no
+      scenery, no soft pastel — this panel hits harder than everything around it.
+
+  # 고퀄 한국 웹툰 + 시네마틱 반실사. romance 와 **화려해지는 방식이 다릅니다.**
+  #
+  #   romance   장식으로 화려하다 — 장미·금박·레이스·보석. 배경이 무대 장치다.
+  #   cinematic 빛으로 화려하다 — 역광·공기·얕은 심도·색보정. 배경이 실제 공간이다.
+  #
+  # 그래서 둘을 섞지 마세요. cinematic 에 장미와 금박을 넣으면 romance 가 되고,
+  # 그 순간 "실제로 거기 있는 사람" 이라는 이 그림체의 근거가 사라집니다.
+  #
+  # 반실사(semi-realistic)는 사실적으로 그리라는 뜻이 아닙니다. **비율과 빛은
+  # 사실을 따르고 얼굴은 웹툰으로 두는 것**입니다. 얼굴까지 사실적으로 가면
+  # 캐릭터 시트와 어긋나고 한국 웹툰 독자가 읽는 얼굴이 아니게 됩니다.
+  cinematic:
+    normal: >-
+      High-end Korean webtoon illustration with cinematic semi-realistic
+      rendering — the look of a premium studio title, not a quick weekly panel
+      and not a decorative cover.
+      WHAT MAKES IT BEAUTIFUL IS THE LIGHT, not ornament. Every panel is lit
+      like a film frame: one clear key light with a definite direction and
+      colour, a cool fill on the shadow side, and a bright rim light separating
+      the figure from the background. Light is visible in the air itself —
+      soft atmospheric haze, dust motes or particles drifting through a shaft
+      of light, gentle bloom where the light is strongest. Colour is graded like
+      film: the whole panel leans toward one palette (warm amber, cool teal,
+      dusty rose) instead of every object keeping its own local colour.
+      DEPTH: shallow depth of field. The subject is sharp and everything behind
+      falls into soft focus with round bokeh in the highlights. Foreground
+      elements — a shoulder, a leaf, a railing — may sit blurred at the very
+      front of frame to build depth, as a real lens would see it.
+      PROPORTION AND ANATOMY: realistic and grounded. Correct head-to-body
+      ratio for an adult (about 7 heads), real shoulder width, real hand size,
+      believable weight and balance in the pose. No chibi shortcuts.
+      HANDS are fully drawn and correctly built — right length, right joints,
+      lit by the same key light as the face. Do not hide them or crop them away
+      to avoid drawing them.
+      This is one panel of an ongoing episode that continues above and below it,
+      not a standalone poster: the framing and the moment come from the beat,
+      and the cinematic finish is how it is rendered, not what it is.
+      FACE: still a Korean webtoon face, not a photograph. The eyes are large
+      and clean with a smooth colour gradient in the iris, a soft dark rim, one
+      strong catchlight plus one or two smaller reflected ones — luminous but
+      not jewel-encrusted. Eyelashes are drawn as a few grouped strokes rather
+      than one by one. The nose is simple but has a lit bridge and a soft
+      shadow beneath it; the mouth is small with a subtle gloss. Skin shows real
+      form: a soft blush across the cheeks and nose, faint translucency at the
+      ear tips, a fine sheen on the forehead and cheekbones, and where strong
+      light rakes across the face it warms the skin from within.
+      HAIR: rendered in grouped strands with a soft gradient from a deeper tone
+      at the roots to a lighter tone at the tips, one broad soft highlight band
+      following the shape of the head, and loose flyaway hairs catching the rim
+      light. Hair takes the colour of whatever light is hitting it.
+      FABRIC AND MATERIAL: clothing hangs with real weight and has believable
+      folds. Render each material for what it is — cotton matte and slightly
+      fuzzy at the edge, denim with visible weave, leather with a broad soft
+      highlight, metal and glass with sharp small reflections.
+      BACKGROUND: a real place, drawn with real perspective and enough detail
+      to be believable, then pushed back with soft focus and atmosphere so the
+      figure stays dominant. No decorative motifs floating in the air, no
+      abstract sparkle field, no gold filigree — the beauty comes from light,
+      depth and colour, never from ornament pasted on top.
+      LINEWORK: fine and controlled with gentle width modulation, and it
+      partly dissolves where the light is brightest so the form is carried by
+      value rather than outline. Line colour takes on the local colour instead
+      of staying black.
+      FINISH: soft film grain over the whole image, very slight chromatic
+      fringing at the highest-contrast edges, deep but never crushed shadows.
+      Cinematic and grounded — as if this character were photographed on a real
+      set and then painted by a top Korean webtoon studio. Not a 3D render, not
+      a photograph, not a rough sketch, not a flat weekly panel, and not an
+      ornamental romance-fantasy cover.
+
+    sd: >-
+      Korean webtoon chibi / super-deformed (SD) comedy insert. The figure is
+      2-3 heads tall with a head as large as the whole body. The face is reduced
+      to the simplest shapes: huge round eyes with one big glossy catchlight
+      each, the nose a single dot or omitted, a tiny simple mouth, no jawline,
+      no realistic anatomy anywhere. Clean rounded linework of even weight.
+      Soft flat colours with at most one gentle shadow tone — no cinematic
+      lighting, no depth of field, no grain.
+      The background is a plain soft colour wash with no setting, scattered with
+      small stars, hearts and sparkle marks. Bouncy, cute and comedic.
+      Keep only the colour palette of the surrounding panels so it reads as the
+      same story; everything else is deliberately far simpler. This panel is a
+      joke aside, not a rendered illustration.
+
+    emphasis: >-
+      Cinematic emphasis frame. The setting is stripped away and replaced by a
+      dark, near-abstract field: a single hard shaft of light cutting across the
+      frame, deep atmospheric haze, and fine particles caught in the beam. Very
+      high contrast — one deeply saturated accent colour against crushed shadow,
+      a hard bright rim light burning along the silhouette and through the hair,
+      strong bloom where the light hits. Radiating speed lines converge on the
+      figure through the haze. The figure is cropped close and dominates the
+      frame; the eyes catch the light hardest of anything in it. Heavier line
+      weight on the silhouette than a normal panel, and heavier grain.
+      No scenery, no soft daylight — this panel hits harder than everything
+      around it.
+
+  # 선화. **액션 컷을 위해** 만든 그림체입니다.
+  #
+  # 다른 셋과 화려해지는 방식이 다릅니다:
+  #   webtoon    색으로 읽힌다 — 셀 채색, 그림자 톤
+  #   romance    장식으로 화려하다 — 장미·금박·보석
+  #   cinematic  빛으로 화려하다 — 역광·공기·얕은 심도
+  #   lineart    **선과 여백으로 읽힌다** — 톤을 거의 안 쓰고 포즈와 실루엣이 다 한다
+  #
+  # ★ 목표는 "멋있는 일본 만화 액션 일러스트"가 아니라 **세로 스크롤 웹툰에
+  #   바로 들어가는 액션 컷**입니다. 둘은 다릅니다:
+  #
+  #     일본 만화 원고        웹툰 액션 컷 (이쪽)
+  #     굵은 펜선·붓선        얇고 깨끗한 디지털 선, 필압은 은은하게
+  #     스크린톤·해칭 가득    톤 거의 없음. 흰 여백이 그대로 남음
+  #     한 장에 동작을 다 담음  한 순간만. 위아래 컷으로 이어짐
+  #     인물을 화면 밖으로 과감히 자름  자르되 과하지 않게, 상대 위치가 읽히게
+  #     효과선이 화면을 채움   효과선은 포즈를 돕는 보조. 인물보다 세면 안 됨
+  #
+  #   그래서 아래 문구는 hatching / screentone / brush / solid black 을 **금지어
+  #   쪽에 놓습니다.** 이 낱말들을 되살리면 곧바로 만화 원고로 돌아갑니다.
+  #
+  # ★ 색 지시가 프롬프트 **뒤쪽**에 또 옵니다. 코드가 design_lock 으로 팔레트
+  #   ("hair: black (#232323), skin: light peach (#FBE9D0) …")를 {style} 다음에
+  #   강제로 붙이기 때문입니다(charsheet.lock_text). 그래서 monochrome_styles 가
+  #   그 팔레트를 명도로 바꿔치기합니다 — 아래 문구로 부탁하는 것이 아닙니다.
+  lineart:
+    normal: >-
+      Artwork from a modern Korean vertical-scroll webtoon, drawn as CLEAN LINE
+      ART — one continuous scrolling episode, whether this image holds a single
+      moment or several consecutive moments bundled into one tall image. NOT a
+      standalone illustration, NOT a poster, NOT a page of a Japanese manga. Every
+      framed area in this image follows the SAME rules below — there is no framed
+      area that gets to be an exception and revert to full colour rendering.
+      LINEWORK IS THE WHOLE DRAWING. Clean, crisp, controlled lines with gentle
+      pressure variation — a slightly heavier contour holding the figure, thinner
+      lines inside for folds, hair and features, tapering where a stroke ends.
+      Modern digital webtoon inking: precise and smooth, not a rough brush, not a
+      thick blunt manga pen, not scratchy, not sketchy. Every shape is closed and
+      confident.
+      WHAT IS FILLED AND WHAT IS LEFT WHITE — follow this exactly, in every panel,
+      for EVERY character in frame, not only the main one. This is the single rule
+      that keeps consecutive panels looking like the same drawing:
+        · SKIN — never filled. Bare white paper, for every face, neck and hand in
+          the panel. No skin tone, no beige, no grey, no blush, no shading across
+          it. Only the contour line and a few crease lines describe it. A filled
+          or tinted face is wrong even if the rest of the panel is correct.
+        · HAIR — filled SOLID BLACK as one clean flat shape, with the highlight
+          left as bare white paper cutting across it. Never grey, never streaked
+          with tone.
+        · CLOTHING — filled. Each garment gets ONE flat solid tone with a crisp
+          edge and no gradient inside it: a dark robe is solid black, a lighter
+          garment is one flat mid-grey. Fill the whole garment evenly. Do not
+          leave clothing as bare outline, and do not shade it with hatching.
+        · EVERYTHING ELSE — left white with line only: blades, metal, armour,
+          wood, stone, paper, ground, sky, walls, props. No fills, no tone, no
+          metallic gold or silver rendering.
+        · BACKGROUND — line only, never filled, and mostly empty white.
+      So the panel reads as: black hair, black or grey clothing, and white
+      everything else. That contrast is the whole look.
+      ALMOST NO TONE beyond those fills: no halftone screentone dot fields, no
+      cross-hatched shading, no grey washes, no gradient rendering. If a shadow is
+      not needed to explain the form, leave it white.
+      WHITE SPACE IS PART OF THE PANEL, not an empty illustration background. The
+      paper stays open and clean around the action so the reader's eye lands on
+      the figure immediately on a phone screen.
+      BACKGROUND: kept to the minimum that tells the reader where they are — a
+      suggestion of ground, a few sparse lines of the setting, or nothing at all.
+      Never a fully rendered environment, never a crowd, never architecture drawn
+      in detail. The background must never compete with the action.
+      THIS RULE DOES NOT SOFTEN FOR BRIGHT, OUTDOOR OR NATURAL SCENES — daylight,
+      forests, mist, grass, wood grain and morning haze are the settings where this
+      style is most often broken. Sunlight is a few clean line strokes, not a warm
+      colour wash; foliage is a line pattern, not green; mist is white paper with
+      a soft line edge, not a grey or blue gradient. A forest at dawn is drawn with
+      exactly the same bare-white-paper rule as a plain empty room.
+      MOTION: carried mostly by the pose itself — the tilt of the body axis, the
+      stretch of limbs, cloth and hair thrown by the movement. Effect lines are a
+      light accent on top of that: a few long clean speed lines trailing the moving
+      limb or blade, one sweeping arc marking the path of a strike, a small scatter
+      of debris or petals. Keep them restrained and directional. Do NOT fill the
+      panel with dense radiating focus lines, do NOT bury the figure in effects,
+      do NOT let the effect lines become louder than the character.
+      IF THIS PANEL IS AN ACTION BEAT: show ONE instant, not the whole move. Do not
+      compose it as a finished action illustration that resolves inside its own
+      frame — it is a beat in a sequence, and the panels above and below carry the
+      rest. The acting figure is large enough that the body and face read at a
+      glance, with the body axis clearly tilted and the limbs stretched by the
+      movement. Whoever they are acting against must be visible in the panel and
+      placed so the direction of the attack is obvious — not a crowd, but not
+      absent either. Crop the figure at the panel edge if the composition calls for
+      it, but do not use an extreme poster crop that leaves only a fragment.
+      FACE: a modern Korean webtoon face, clean and readable. Large expressive eyes
+      drawn with a crisp outline, a solid pupil and one clear catchlight left white;
+      a simple lash line; the nose a short stroke; the mouth a firm simple line; the
+      eyebrows carrying most of the expression. The face must stay legible at the
+      size it is drawn — never reduce it to a distant dot.
+      PROPORTIONS: realistic adult proportions, roughly seven to eight heads tall,
+      with correct anatomy and real weight. Never chibi, never super-deformed,
+      never shortened.
+      FINAL CHECK before you finish: look at every area of the drawing — if skin,
+      sky, ground, foliage, mist, wood or metal carries any colour, tan, beige,
+      grey wash or gradient anywhere, that is wrong and must be removed. Only hair
+      and clothing may be filled, and only as flat solid black or one flat solid
+      grey. Everything else stays bare white paper with line only.
+      Clean, modern, readable Korean webtoon line art. Not a Japanese manga page,
+      not a screentoned comic, not a painted illustration, not a pencil sketch, not
+      photorealistic, not a 3D render.
+
+    # ★ 액션 컷에는 절대 붙지 않습니다. gate_cuts 가 SD 를 beat 가 release·hold·
+    #   build 인 컷에만 허용하므로 turn(뒤집히는 순간)에는 오지 않고, W7 이
+    #   전투 컷을 turn 으로 잡습니다. 그래도 개그 컷은 있어야 하므로 남깁니다.
+    sd: >-
+      Korean webtoon chibi / super-deformed (SD) comedy insert drawn in CLEAN LINE
+      ART. The figure is 2-3 heads tall with a head as large as the whole body. The
+      face is reduced to the simplest shapes: huge round eyes with a solid pupil and
+      one big white catchlight each, the nose a single dot or omitted, a tiny simple
+      mouth, no jawline, no realistic anatomy. Rounded bouncy linework.
+      NO SHADING AT ALL — no hatching, no screentone, no gradient. Everything is
+      bare white inside the outlines. That emptiness is what separates this panel
+      from the ones around it.
+      KEEP THE PLACE. The background stays the same location as the surrounding
+      panels — the same room, the same objects — but reduced to a few loose
+      strokes. Do not replace it with an empty void: an SD panel is a joke told in
+      the same room. Scatter small hand-drawn stars, sweat drops and puff marks
+      around it.
+      Bouncy, cute and comedic. This treatment is for comedy beats ONLY — never for
+      an action, fight or dramatic beat.
+
+    emphasis: >-
+      Korean webtoon emphasis panel in CLEAN LINE ART. The background is dropped
+      entirely and the figure sits on open white with a restrained set of long
+      speed lines converging on them — clean tapering strokes, sparse and
+      directional, never a dense wall of hatching. The figure is cropped closer and
+      the linework is a step heavier than a normal panel so this beat lands harder,
+      but the drawing stays clean: no screentone fields, no grey wash, no large
+      solid black background. Solid black only in the hair, pupils and small
+      accents. The eyes are the sharpest thing in the panel.
+      Still part of a scrolling episode, not a standalone poster.
+
+  # 일상툰 감성체. 앞의 넷과 **완성도의 방향이 반대**입니다.
+  #
+  #   webtoon    깔끔한 선 + 셀 채색 — 잘 그린 상업 컷
+  #   romance    장식으로 화려하다 — 장미·금박·보석
+  #   cinematic  빛으로 화려하다 — 역광·공기·심도
+  #   lineart    선과 여백으로 읽힌다 — 톤이 거의 없다
+  #   pastel     **덜 완성돼 보이는 것 자체가 스타일이다**
+  #
+  # 앞의 넷은 전부 "잘 그린 고퀄 그림"이라, 한 화 안에서 톤이 갈려도 결국 같은
+  # 공정에서 나온 것으로 보입니다. 이 그림체의 값어치는 **대비**입니다 — 손으로
+  # 그은 흔들리는 선, 종이 결, 선 밖으로 삐져나온 색, 채도를 낮춘 대여섯 색.
+  # 화면이 따뜻하고 사적으로 읽혀야 합니다. 장르는 일상·학원·코미디입니다.
+  #
+  # ★ webtoon 과 헷갈리기 가장 쉽습니다. 구분선은 **선과 색의 경계**입니다.
+  #   webtoon 은 선이 닫히고 색이 경계에서 딱 끊깁니다. pastel 은 선이 끊기고
+  #   색이 경계를 넘습니다. clean / crisp / closed shapes / flat cel shading 을
+  #   되살리면 그 순간 webtoon 으로 되돌아갑니다. 그래서 그 낱말들을 금지어
+  #   쪽에 놓았습니다.
+  # ★ "예쁘게 만들려는" 손버릇을 전부 금지합니다 — 림라이트·보케·얕은 심도·
+  #   반짝임·글로우·보석 눈. 하나만 들어와도 cinematic 이나 romance 쪽으로
+  #   끌려가고, 그러면 이 그림체가 존재할 이유가 없어집니다.
+  # ★ 색이 적다고 무채색이 아닙니다. **monochrome_styles 에 넣지 마세요.** 그
+  #   훅은 프롬프트 맨 끝에 "검은 잉크와 흰 종이뿐, 한 픽셀도 색이 없다"를
+  #   박습니다(scenegen.MONO_TAIL). 그러면 이 그림체의 정체인 바랜 파스텔이
+  #   통째로 지워지고 lineart 와 같은 그림이 나옵니다.
+  pastel:
+    normal: >-
+      Korean slice-of-life webtoon (일상툰) drawn in a warm, hand-made, deliberately
+      UNPOLISHED style — the look of a personal diary comic an author draws alone,
+      not a studio production. It is one panel of an ongoing scrolling episode that
+      continues above and below it.
+      THE POINT OF THIS STYLE IS THAT IT LOOKS UNFINISHED. It must read as if the
+      drawing were made quickly by one hand on real paper and left that way on
+      purpose. Anything that makes it look expensive, corrected or mass-produced is
+      wrong here.
+      LINEWORK: rough, loose, visibly hand-drawn strokes with strong pressure
+      variation — pencil, coloured pencil or a soft dry brush pen, never a crisp
+      vector line. Lines wobble slightly, thicken and thin, and often overshoot at
+      the corners. Shapes are frequently LEFT OPEN: a sleeve, a chair leg or a
+      shoulder may simply stop, and the reader closes it. Some contours are drawn
+      twice with the searching stroke still visible. The line is not pure black —
+      it is a warm charcoal grey, a soft brown or a muted tone of the local colour.
+      No inking-over, no perfectly closed outlines, no uniform digital weight.
+      COLOUR: a limited muted palette of about five or six low-saturation tones —
+      dusty pastels and warm greys, like faded coloured pencil, gouache or
+      watercolour on tinted paper. Everything sits in a narrow value range with
+      gentle contrast; nothing in the panel is fully saturated and nothing is pure
+      white or pure black. The colour is laid in as SOFT UNEVEN PATCHES that do not
+      line up with the drawing: it slips past the contour on one side, stops short
+      of it on the other, and leaves small breathing gaps of bare paper inside the
+      shape. Pigment pools slightly darker at the edge of a stroke. Do not fill
+      areas flatly and do not use cel shading with a crisp shadow edge.
+      TEXTURE: visible paper grain across the whole image, faint pencil tooth in the
+      shaded areas, a slightly warm off-white paper tone underneath everything. The
+      texture is part of the drawing, not a filter laid on top of a clean render.
+      SHADOW: barely there. One soft muted tone dropped where it is genuinely
+      needed — under the chin, under a table, on the side of a face away from the
+      window — with a soft irregular edge, and nothing else. No rim light, no glow,
+      no bloom, no shine, no specular highlights anywhere in the panel.
+      FACE: small, simple and warm. The eyes are modest in size — a soft oval, a
+      simply drawn iris, ONE small catchlight or none at all, a short lash line, no
+      layered iris and no jewel rendering. The nose is a tiny stroke or dot, the
+      mouth a short soft line. Cheeks get a small patch of dry blush that sits
+      slightly off-register from the face. Expression is quiet and everyday:
+      thinking, tired, mildly amused, distracted. Save big expressions for actual
+      comedy beats, where they become a loose scribbled exaggeration rather than a
+      rendered one.
+      PROPORTION: adults about six and a half to seven heads tall — a little
+      rounder, softer and shorter than the polished styles, with gentle sloping
+      shoulders, a soft body line and no idealised V-taper or long-legged glamour.
+      Never chibi outside an explicit SD panel, but never a fashion figure either.
+      HANDS: drawn simply and honestly with four fingers and a thumb, a little
+      chunky, correct in structure but not detailed — no tapering elegant fingers,
+      no rendered knuckles. Hands doing small ordinary things (holding a mug, a
+      phone, a pen, a bag strap) are welcome and should stay in frame.
+      HAIR: a soft loose mass drawn with a few sweeping strokes and a scatter of
+      stray hairs. The highlight, if any, is a single pale broken band or a patch of
+      bare paper left uncoloured — never a glossy ring, never several bands, never
+      strand-by-strand rendering.
+      BACKGROUND: an ordinary lived-in place, drawn loosely but genuinely present —
+      a classroom, a convenience store, a bus stop, a small kitchen, a stairwell at
+      dusk. Perspective is slightly relaxed and hand-judged rather than ruled. Draw
+      only a handful of specific everyday objects and let the rest fall away into
+      bare paper: a half-drawn windowframe, three books, one mug ring on the desk.
+      Small mundane detail is what carries the warmth here, so do not empty the
+      panel completely — but never render the environment fully.
+      COMPOSITION AND MOOD: quiet and observational. Plenty of empty paper around
+      the figure, a lot of medium and wide shots where the character is small in a
+      real room, ordinary eye-level framing. The feeling comes from the moment and
+      the room, not from a dramatic angle.
+      MOTION AND FEELING: carried by small hand-drawn marks that look scribbled in
+      after the fact — a couple of short motion strokes, a little puff of dust, a
+      sweat drop, three tiny lines over the head, a small hand-lettered scribble of
+      surprise. Keep them sparse, wobbly and light. No dense radiating focus lines,
+      no impact bursts filling the panel, no screen-toned effect fields.
+      Warm, intimate, gentle, a little melancholy — the visual voice of a personal
+      daily-life webtoon. NOT clean, NOT crisp, NOT cel-shaded, NOT glossy, NOT a
+      cover illustration, NOT cinematic, no depth-of-field blur, no bokeh, no lens
+      flare, no sparkle particles, no gold ornament, not photorealistic, not a 3D
+      render, and not the polished weekly-serial webtoon look.
+
+    sd: >-
+      Slice-of-life webtoon SD (super-deformed) aside, drawn even more roughly than
+      a normal panel of this style. The figure is 2-3 heads tall with a head as
+      large as the whole body: dot eyes or two simple curved lines, a tiny mouth, no
+      nose, no jawline, no anatomy. The linework is a fast wobbly pencil scribble
+      with obvious width variation and open shapes — it should look like a doodle
+      squeezed into the margin of a notebook.
+      COLOUR: two or three muted pastel tones patted on loosely, well outside the
+      lines, over visible paper grain. No shading at all.
+      KEEP THE PLACE. The background stays the same room as the surrounding panels
+      but is reduced to three or four loose scribbled strokes — the corner of the
+      desk, the edge of the window. Do not replace it with a plain colour field.
+      Scatter a few small hand-drawn marks around the figure: puff clouds, a sweat
+      drop, wobbly stars, a tiny scribbled heart.
+      Cute, clumsy and funny. Deliberately rougher and simpler than everything
+      around it — not cleaned up, not detailed.
+
+    emphasis: >-
+      Slice-of-life webtoon emphasis panel — a quiet beat landing harder, NOT an
+      action hit. The background thins out to nearly bare warm paper with a few
+      soft hand-drawn radiating pencil strokes or a loose watercolour wash of one
+      muted tone behind the figure. The figure is cropped closer than usual —
+      often just the face, the eyes, or a pair of hands — and the linework is a
+      step darker and heavier, with the searching strokes left visible. Contrast
+      rises only a little: the palette stays muted and low-saturation, and the
+      strongest thing in the panel is a single small patch of colour (a blush, a
+      cup, a red string) against faded paper. Keep the paper grain. No hard rim
+      light, no glow, no crushed black, no dense speed lines, no impact bursts —
+      this panel gets its weight from stillness and empty space, not from force.
+
+  # 다크 느와르. 정체는 **뭉개진 명암(crushed value)과 검은 덩어리**입니다.
+  # 어둠이 배경이 아니라 **그리는 대상 그 자체**입니다.
+  #
+  # 셋과 헷갈릴 수 있어서 경계를 못 박아 둡니다:
+  #
+  #   lineart    흰 종이 + 톤 없음. 검정은 머리카락과 옷에만.  → 화면이 **밝다**
+  #   noir       검은 덩어리 + 무거운 톤. 흰 곳은 소수의 빛뿐. → 화면이 **어둡다**
+  #
+  #   cinematic  실제 렌즈의 빛 — 부드러운 감쇠, 얕은 심도, 보케, 블룸, 색보정
+  #   noir       **그래픽한 빛** — 감쇠 없이 딱 끊기는 그림자 덩어리, 심도 없음
+  #
+  # 즉 cinematic 은 빛을 **시뮬레이션**하고, noir 는 그림자를 **도형으로 디자인**
+  # 합니다. 블라인드살·창틀·난간·계단이 만드는 하드에지 그림자가 얼굴과 벽을
+  # 가로지르는 그 판형이 이 그림체의 문법입니다. bokeh / depth of field / bloom /
+  # soft falloff 를 되살리면 즉시 cinematic 으로 돌아갑니다.
+  #
+  # ★ **monochrome_styles 에 넣지 마세요.** 그 훅의 마지막 못(scenegen.MONO_TAIL)
+  #   은 "BLACK INK ON WHITE PAPER … inked line art" 라고 못 박습니다 — 흰 종이와
+  #   선화입니다. noir 는 정반대로 **검은 덩어리와 먹번짐**이라, 그 문장이 뒤에
+  #   붙는 순간 이 그림체가 lineart 로 무너집니다. 채도를 죽이는 일은 아래 COLOUR
+  #   문구가 직접 합니다 (완전 무채색이 아니라 한두 색만 남은 제한 팔레트입니다).
+  noir:
+    normal: >-
+      Dark noir webtoon panel — heavy chiaroscuro ink work, oppressive and
+      threatening. One panel of an ongoing scrolling episode that continues above
+      and below it, not a poster and not a standalone illustration.
+      DARKNESS IS THE SUBJECT OF THIS PANEL, not its background. Most of the frame
+      is solid black. The lit area is the minority and it is small, deliberate and
+      shaped — a wedge of light across a face, a strip along a jaw, the top plane
+      of a shoulder. Compose the panel as a design of black masses first and figures
+      second: decide where the black shapes go, then let the drawing live in what is
+      left. If the image reads as bright, or as a lit scene with some shadows in it,
+      it is wrong.
+      VALUE: crushed and limited to about four steps — solid black, a dark tone, a
+      mid tone, and a small area of near-white. Nothing sits in between; the
+      midtones are squeezed out. Shadows go completely black with no detail
+      recovered inside them, and it is correct for a hand, a leg, half a torso or an
+      entire secondary figure to be swallowed by the black and read only as a
+      silhouette. Highlights blow to near-white with a hard edge.
+      SHADOW SHAPE: the shadows are DRAWN, not simulated. Hard-edged, graphic,
+      designed shapes with no soft falloff and no gradient at the boundary — cast
+      slats from a blind striping a face and the wall behind it, the black cross of
+      a window frame, the bars of a railing, the shadow of a doorway falling as one
+      clean black wedge across the floor. Let the cast shadow cut a face in half so
+      that only one eye and a strip of cheek stay lit. Where a soft edge is needed,
+      it is an ink-wash bleed, not a lighting gradient.
+      RENDERING: brush and ink. Solid black fills laid with a loaded brush, grey
+      ink wash pooling and drying with visible hard edges, dry-brush drag where the
+      brush runs out, spatter and flicked ink in the darkness, coarse hatching only
+      where a form has to turn inside a shadow. The blacks are dense and flat, not
+      airbrushed. Texture comes from ink and paper, never from a photographic grade.
+      COLOUR: nearly desaturated. Cold near-black blue-greys and cool charcoals for
+      almost everything, with warm tones drained out. Allow at most ONE restrained
+      accent in the whole panel — a sodium-lamp amber, a sickly green, a dull blood
+      red — used small and used once, on a sign, a cigarette, a wound, one eye. All
+      other local colours collapse toward that near-monochrome scheme. Never a full
+      colour panel, never bright saturated colour, never a warm pleasant palette.
+      LINEWORK: heavy, angular and unequal — a thick brushed contour where a form
+      meets the light, and no contour at all where it meets the black, because there
+      the silhouette itself is the edge. Lines break, blot and taper. Never thin,
+      never uniform, never clean vector inking.
+      FACE: hard and angular, cut by shadow. Sharp cheekbones, a defined jaw, a
+      strong brow ridge, deep hollows under the eyes. Most often the eyes sit inside
+      a solid black band of shadow with only a hard specular catchlight showing —
+      that glint is frequently the brightest thing in the panel. Half a face lit and
+      half in absolute black is the default framing for a close-up here. Expressions
+      are contained and cold: a flat stare, a small tightening of the mouth, a
+      lowered brow. No large glossy eyes, no layered jewel iris, no blush, no
+      sparkle, no cute expressions, no cartoon sweat drops.
+      PROPORTION: grounded, heavy, adult — about seven to seven and a half heads
+      tall, with real weight, thick shoulders, a low centre of gravity and
+      believable balance. Bodies feel physically dangerous rather than elegant. No
+      chibi outside an explicit SD panel, no long-legged glamour build.
+      HANDS are drawn and lit deliberately: blocky and tendoned, gripping a weapon,
+      a railing, a cigarette or someone's collar, usually with the fingers half
+      lost in shadow and only the top planes catching light.
+      HAIR: a single solid black mass with a sharp silhouette, cut by one or two
+      hard-edged light strips where the key light rakes across it. No gloss ring, no
+      soft gradient, no strand-by-strand rendering.
+      ATMOSPHERE: wet, cold and enclosed. Rain, standing water throwing hard broken
+      reflections, cigarette smoke and steam hanging in the light, dust in the air,
+      fog rolling in the black. Environments are night streets, corridors, stairwells,
+      basements, gate interiors, back alleys and rooms lit by one bad source.
+      BACKGROUND: mostly consumed by black. Draw the little that has to be read —
+      one lit doorway, one sign, a rail, the wet edge of a kerb, the geometry of a
+      staircase — and let the rest go to solid ink. Use hard perspective and severe
+      angles: low shots that make the figure loom, high shots that press them into
+      the ground, tilted horizons.
+      MOTION AND IMPACT: violent and graphic. Black smears and ink drag behind a
+      moving limb, a hard white slash marking the path of a strike, a burst of
+      spatter, harsh white impact cracks against black. Effects are made of ink, not
+      of glow — no light trails, no particle sparkles, no bloom.
+      Oppressive, threatening, heavy. NOT clean line art on white paper, NOT a
+      bright panel, NOT cinematic photographic lighting — no depth of field, no
+      bokeh, no lens flare, no soft light falloff, no film colour grading, no glow.
+      No ornament, no roses, no gold, no sparkle. Not photorealistic, not a 3D
+      render, not a grey painterly wash — brushed black ink and crushed value.
+
+    sd: >-
+      Noir webtoon SD (super-deformed) comedy aside, drawn in the same heavy ink but
+      reduced to a joke. The figure is 2-3 heads tall with a head as large as the
+      whole body: huge round eyes with one hard white glint each, no nose, a tiny
+      mouth, no jawline, no anatomy. Thick blunt brush linework with blotted
+      corners.
+      Flat fills only — solid black and one mid grey, no wash, no hatching, no
+      gradient. The palette stays the same desaturated near-monochrome as the
+      surrounding panels; the single accent colour may appear once.
+      KEEP THE PLACE. The background stays the same location as the panels around it
+      — the same alley, the same corridor, the same room — but flattened to a few
+      blunt shapes and a black field. Do not replace it with a bright colour wash.
+      Scatter small ink marks around the figure: a sweat drop, a puff, a scribbled
+      cross-mark, a little smoke curl.
+      Deadpan and comedic, deliberately far simpler and blunter than a normal panel
+      — none of the chiaroscuro modelling, no ink wash, no rendered shadow shapes.
+      Still dark in palette: this is a joke told in a dark room, not a cute pastel
+      cutaway.
+
+    emphasis: >-
+      Noir emphasis frame. The setting is gone and the figure stands in a field of
+      absolute black. One hard shaft or blade of light cuts the frame at a severe
+      angle and carves the figure out of the dark, leaving most of the body as pure
+      silhouette and lighting only a rim along the jaw, the shoulder and the knuckles.
+      Value is crushed to its extreme: solid black and a small blown-out near-white,
+      with almost nothing between them. Ragged black brush strokes and spatter
+      radiate inward toward the figure instead of clean speed lines. The figure is
+      cropped very close and fills the frame. A single hard catchlight in the eye,
+      or the panel's one accent colour used once, is the brightest thing in it.
+      Linework is heavier and blunter than a normal panel. No scenery, no soft
+      light, no glow, no particles — this panel hits harder than everything around it.
+
+  # 순정만화 / BL풍. 계보가 다릅니다 — 이쪽은 **일본 만화 원고의 후예**이고,
+  # 화면을 만드는 재료가 컬러 렌더링이 아니라 **선·스크린톤·여백**입니다.
+  #
+  # romance 와 반드시 갈라야 합니다:
+  #
+  #   romance  로판 표지 일러스트 — 보석 눈(하이라이트 3~4개), 금박·레이스·자수,
+  #            배경을 장식으로 꽉 채움, 풀컬러 고밀도 렌더링. **화려함이 목적**
+  #   shoujo   그래픽하다 — 길고 날카로운 눈, 각진 턱선, 절제된 색, 톤과 여백,
+  #            장식은 선으로 그린 꽃·반짝임이 여백에 떠 있는 것. **얼굴과 긴장이 목적**
+  #
+  # 이 그림체의 주제는 언제나 **얼굴, 그리고 두 사람 사이의 거리**입니다. 컷의
+  # 절반 이상이 클로즈업이고, 배경은 자주 사라지고 그 자리를 톤과 꽃무늬가
+  # 대신합니다. 장르는 오메가버스·센티넬·BL입니다.
+  #
+  # ★ 눈을 romance 처럼 그리면 즉시 무너집니다. 여기 눈은 **크고 둥근 보석이 아니라
+  #   길고 좁고 날카로운 눈**입니다. 하이라이트는 하나, 많아야 둘.
+  # ★ 배경의 꽃과 반짝임은 **그려 넣은 그래픽 기호**입니다 — 3D 로 떠 있는 빛
+  #   입자나 보케가 아닙니다. 렌더링하면 romance/cinematic 이 됩니다.
+  # ★ 색을 절제합니다. 채도 높은 색은 한 컷에 한 자리(눈·꽃·리본·피)만.
+  #   **monochrome_styles 에는 넣지 않습니다** — 스크린톤 느낌은 이 문구가 직접
+  #   지시하고, 그 훅을 켜면 남겨 둔 그 한 색까지 먹으로 지워집니다.
+  shoujo:
+    normal: >-
+      Korean webtoon panel drawn in the shoujo / BL manga tradition (순정만화 · BL풍)
+      — graphic, elegant and emotionally charged, built from line, screentone and
+      empty space rather than from painted rendering. It is one panel of an ongoing
+      scrolling episode that continues above and below it.
+      WHAT THIS PANEL IS ABOUT IS THE FACE, AND THE CHARGE BETWEEN TWO PEOPLE.
+      Frame accordingly: close and very close shots dominate — a face at three
+      quarters, a pair of eyes across the full width, a mouth, a throat, a wrist
+      caught by a hand. Wide establishing shots are rare and brief.
+      FACE: sharp and angular, not round and not soft. A narrow pointed chin, a
+      long clean jawline meeting the ear at a distinct angle, high flat cheekbones,
+      a slender neck, a long straight nose reduced to one fine tapering stroke with
+      a small shadow beside it, and a small mouth with a defined upper lip.
+      EYES — long, narrow and elegant, NOT large round jewels. The eye is a
+      horizontally elongated almond with a sharply upswept outer corner and a
+      strong dark upper lash line that thickens toward that corner into a decisive
+      wedge. The iris is tall and partly hidden under the upper lid. Inside it: one
+      dark rim, a simple vertical value gradient rendered in dot tone, a solid dark
+      pupil, ONE crisp white catchlight and at most one small secondary one. Long
+      individually drawn upper lashes flick outward at the corner; the lower lash
+      line is a few separate strokes. Never a wide circular eye, never a layered
+      faceted gemstone iris, never three or four scattered sparkles inside it.
+      EYEBROWS are thin, long and precisely shaped, and they do most of the acting.
+      PROPORTION: elongated and elegant — about nine heads tall, with a small head,
+      an extremely long neck, narrow sloping shoulders, a long waist, very long legs
+      and slender limbs. Figures read as tall, weightless and stylised rather than
+      anatomically grounded. Never squat, never chibi outside an explicit SD panel.
+      HANDS are long, bony and expressive, with visible tendons and knuckles,
+      elongated fingers and clearly drawn nails. Hands are a major subject in this
+      style — a hand gripping a wrist, cupping a jaw, gathering a collar, hesitating
+      just short of contact. Give them as much line work as the face and never crop
+      them away.
+      TWO FIGURES: the composition is about the distance between them and about who
+      is above whom. Overlap the silhouettes, push one figure's shoulder or hair
+      across the front of frame, tilt the framing so one looks down and the other
+      up, and let a strand of hair, a breath of space or one hovering hand carry
+      the tension. Keep the gap between them explicit and readable.
+      SHADING — SCREENTONE, not painting. Model form with flat mechanical dot
+      tone: an area of even halftone dots for a mid value, a graded dot ramp where a
+      plane turns, a denser tone for a deep shadow, and hard white where the light
+      lands. Tone areas have crisp cut edges, exactly as if a sheet of tone had been
+      cut with a blade, and may be scraped white with fine parallel scratch lines at
+      the highlight. Use tone gradients behind and around the figures as pure mood.
+      No airbrushed skin, no soft painted gradients, no volumetric light.
+      COLOUR: restrained and desaturated. A narrow palette of pale neutrals, dusty
+      roses, cool greys, ivory and ink, held at low saturation across the whole
+      panel, with tone standing in for most of the shading. Exactly ONE saturated
+      accent is allowed per panel — the eyes, a ribbon, a single flower, blood on a
+      lip — and it must be the only place the eye goes. Large areas of flat white
+      and flat black are correct and desirable. Never full-colour ornate rendering,
+      never a glossy pastel gradient wash.
+      LINEWORK: fine, sharp and strongly modulated — a hairline stroke swelling and
+      then tapering to a needle point, drawn with a G-pen. Long unbroken confident
+      strokes for hair and cloth, delicate strokes for the face. Line weight varies
+      hard between the figure's silhouette and its interior detail. Pure black line,
+      never coloured line.
+      HAIR: the most decorative element. Drawn as long flowing separated ribbons of
+      strands, streaming outward as if lifted by a wind that exists only for
+      emotional effect, with fine loose hairs breaking away at the edges. Inside the
+      mass, individual strands are picked out with sharp tapering lines. Fill it with
+      flat black or flat tone, and cut the highlight in as a sharp-edged white shape
+      or a scratched band, never as a soft glossy gradient ring.
+      DECORATIVE MOTIFS IN THE NEGATIVE SPACE — this is a defining feature. Where
+      the background is dropped, fill the empty space with drawn graphic motifs
+      floating around the figures: line-drawn roses, lilies and camellias with
+      falling petals, four-pointed sparkle glints, small bubbles and circles,
+      feathers, ribbons, and a wash of dot tone behind them. They are FLAT GRAPHIC
+      SYMBOLS drawn in ink and tone on the surface of the panel — not lens bokeh,
+      not glowing 3D particles, not gold foil ornament, not lace or embroidery.
+      BACKGROUND: frequently dissolved entirely and replaced by tone, motifs and
+      white space, especially in emotional close-ups. When a real place is shown, it
+      is drawn cleanly with fine architectural line and a little tone, then stopped
+      early — the setting is stated, never rendered in full. Vertical composition,
+      empty space above the head, and severe diagonal framing are all encouraged.
+      EXPRESSION AND MOOD: intense but held back. A downward gaze, a half-lidded
+      look, a trembling lash line, one line of shadow across the eyes, a bitten lip,
+      a single tear cutting the cheek. Feeling is enormous but the face barely
+      moves. Avoid loud comic expressions and cartoon sweat drops in a normal panel.
+      Graphic, elegant, tense, romantic. NOT a romance-fantasy cover illustration —
+      no faceted jewel eyes, no gold filigree, no lace or beading rendered
+      individually, no rose-and-bokeh painted background, no full-colour ornament.
+      Not photorealistic, not a 3D render, not a soft painted illustration, not a
+      plain flat weekly webtoon panel.
+
+    sd: >-
+      Shoujo / BL webtoon SD (super-deformed) comedy aside. The figure is 2-3 heads
+      tall with a head as large as the whole body: huge round eyes with one big
+      catchlight each — round here, unlike the long sharp eyes of a normal panel —
+      no nose, a tiny mouth, no jawline, no anatomy. Rounded bouncy pen linework of
+      fairly even weight.
+      Flat fills with no tone modelling and no gradient — the elongated proportions,
+      the screentone shading and the sharp angular face are all dropped, and that is
+      exactly what makes this panel read as an aside.
+      KEEP THE PLACE. The background stays the same location as the surrounding
+      panels, reduced to a few loose lines over a light dot-tone field. Scatter
+      small hand-drawn marks around the figure: sparkle glints, tiny flowers, sweat
+      drops, puff clouds, a little heart. Keep the same restrained palette as the
+      panels around it.
+      Cute, bouncy and comedic — deliberately far simpler than a normal panel.
+
+    emphasis: >-
+      Shoujo / BL emphasis panel. The setting is dropped entirely. The figure — or
+      the two figures, held close — is isolated against a field of screentone: a
+      steep graded dot ramp or a burst of long tapering focus lines converging on
+      the face, with drawn flowers, falling petals and four-pointed sparkle glints
+      scattered through the empty space. The crop is extreme and intimate: eyes
+      across the full width of the frame, a hand at a throat, two faces a breath
+      apart. Contrast is pushed to solid black against bare white, the linework is a
+      step heavier on the silhouette, and the hair streams wider than physics allows.
+      The single accent colour burns in the eyes and nowhere else. All shading stays
+      graphic tone — no glow, no bloom, no light particles, no painted rendering.
+      This panel hits harder than everything around it.
+
+  # 로판의 밀도를 가져오되 **따뜻하지 않고, 커버가 아니라 웹툰 한 컷**입니다.
+  #
+  #   romance  화려함이 장식과 빛에서 옵니다 — 장미·금박·블룸·보케. 색은 따뜻한
+  #            파스텔이고, 렌더링이 표지 일러스트 급입니다.
+  #   frost    화려함이 **머리카락과 속눈썹과 옷의 구조**에서 옵니다. 색온도는
+  #            찬 쪽으로 고정하고, 칠은 셀 셰이딩으로 되돌립니다.
+  #
+  # 그래서 romance 의 문구를 그대로 베끼고 색만 바꾸면 안 됩니다. romance 는
+  # "부드럽게 번지는 빛" 으로 화려해지는데, 그 번짐이 곧 아래에서 막으려는 것
+  # (AI 티) 이기 때문입니다.
+  #
+  # ★ "AI 티" 를 문구로 막는 법 — 추상어("AI 같지 않게")는 이미지 모델에 아무
+  #   지시도 아닙니다. 그래서 실제로 그렇게 보이게 만드는 **버릇을 하나씩 이름
+  #   붙여 금지**하고, 그 자리에 대신 할 일을 적었습니다:
+  #     에어브러시로 문지른 피부   -> 경계가 선 그림자 (셀 셰이딩)
+  #     전체에 깔린 블룸·반짝이    -> 하이라이트는 세는 개수로 제한
+  #     모든 곳이 똑같이 정밀함    -> 얼굴 > 머리 > 옷 > 배경 순서
+  #     좌우대칭 무결점 얼굴       -> 비대칭 하나를 반드시 남긴다
+  #     그라데이션으로 뭉갠 머리   -> 가닥을 세어 그린다
+  #
+  # ★ 여기서 style_common(v2)과 부딪히는 말을 쓰지 않았습니다. 블룸·보케·필름
+  #   그레인을 안 부르므로, 공통 계약이 뒤에 붙어도 서로 싸우지 않습니다.
+  #   (romance 는 "lens bokeh" 를 부르고 있어서 그 자리가 어긋나 있습니다.)
+  frost:
+    normal: >-
+      Korean romance-fantasy (로판) webtoon panel drawn in a COLD palette — the
+      ornament and the finish of a cover illustration, but assembled as one panel
+      of an ongoing episode that continues above and below it, read on a phone
+      while scrolling. Illustration density, webtoon construction.
+      COLOUR TEMPERATURE IS THE IDENTITY OF THIS STYLE AND IT NEVER WARMS UP.
+      The whole page sits in cold light: blue-grey, steel, slate, ash violet,
+      cold silver, deep indigo, pale cyan-white. Shadows go BLUER and darker, not
+      browner. There is no golden hour here, no amber lamplight, no candle glow,
+      no sunset, no warm skin bounce, no sepia, no gold foil, no rose pink.
+      A warm colour may appear ONLY as a single small accent — one ribbon, one
+      gemstone, one drop of blood — and it must be the only warm thing in frame.
+      If the panel feels cosy, it is wrong.
+      EYES — the most worked part of the page. Large, but drawn with ink rather
+      than airbrushed. Build the iris in COUNTABLE bands: a dark defining ring at
+      the outer rim, one deep cold colour beneath it, one lighter cold band rising
+      from the bottom of the iris, and fine radiating fibres struck outward from
+      the pupil with a pen. Exactly TWO highlights — one main catchlight and one
+      small hard specular dot — and nothing else. No floating sparkles inside the
+      iris, no glitter, no starbursts.
+      LASHES ARE DRAWN HAIR BY HAIR, NOT A BLACK WEDGE. The upper lash line is a
+      thick tapering stroke that thins toward the inner corner and flares up at
+      the outer corner, and out of it grow individually inked lashes of DIFFERENT
+      lengths, splitting into small clumps of two or three, never an even comb.
+      A separate finer lower lash line with a few short lashes, spaced apart. A
+      cool shadow the upper lid casts on the top of the eye, and one thin
+      highlight along the lid crease. The lashes stay opaque ink on top of the
+      colour — never blurred into it.
+      HAIR IS THE OTHER HALF OF THIS STYLE. Never a smooth gradient mass. Draw it
+      as separated flowing strands grouped into a few big shapes, with the inner
+      edges of the groups inked so the layers stay legible. Fine loose hairs break
+      away at the silhouette and cross the face. Across the mass run TWO OR THREE
+      hard-edged glossy highlight bands — a bright ring near the crown and softer
+      ones lower down — drawn as SHAPES with defined edges, not as a soft blur.
+      Under the bands, a cool colour step from a deeper tone at the roots to a
+      paler tone at the tips, in visible steps rather than a continuous fade.
+      Individual strands catch the rim light and read as bright single lines.
+      FACE: nose a short simplified stroke, mouth small and simply drawn with at
+      most one small highlight, narrow chin, slim jaw. The face stays a WEBTOON
+      face — stylised and readable — even at this level of finish. Do not drift
+      toward realistic portraiture.
+      SKIN IS MATTE AND COOL, NOT GLOWING. Pale with a blue-grey undertone. Shade
+      it with cel shading: one flat base tone, one shadow tone meeting it at a
+      HARD EDGE, at most one light tone. No airbrushed gradient across the cheek,
+      no warm pink blush, no glossy sheen on the forehead, no subsurface glow.
+      A cold reflected light along the jaw or the neck is allowed and is the only
+      soft edge on the skin.
+      PROPORTION: small head, long body — about eight to nine heads tall for
+      adults, narrow shoulders, high waist, long legs, a long neck. Never squat,
+      never chibi outside an SD panel.
+      HANDS get the same care as the face: long tapering fingers, drawn knuckles
+      and nail shapes, a cold highlight along the top of the hand. Count the
+      fingers.
+      COSTUME: ornate, and ornate by STRUCTURE rather than by sparkle. Layered
+      panels and seams, buckles, laces, chains, embroidery drawn as repeating
+      inked motifs, set stones with hard facets, stiff collars and long hems.
+      Every ornament must be built so it could be drawn the same way in the next
+      panel — if it is a smear of decorative noise, it cannot be repeated and it
+      is wrong. Render fabric by material with hard-edged tone shapes: silk with a
+      sharp cold specular, wool matte, leather with a dull sheen, metal with a
+      bright hard edge and a dark core.
+      BACKGROUND: real space, kept behind the character. Cold architecture,
+      cold weather, cold hours — stone halls, rain, snow light, night windows,
+      overcast noon. Draw it in fewer tones and lower contrast than the figure so
+      the eye lands on the character first. No roses, no drifting petals, no
+      floating light particles, no gold filigree, no glowing bokeh circles.
+      LINEWORK: visible ink on top of the colour, thin but strongly modulated —
+      each stroke swells and tapers, never uniform, never stiff. The line survives
+      everywhere: over hair, over costume, over the shadow edge. Line colour may
+      shift toward a cold local tone but never dissolves into the painting.
+      SHADING: cel shading, with a decided edge. Two or three tones per area
+      meeting at hard boundaries. Large areas of flat unrendered colour are
+      correct and are what keeps this a webtoon rather than a painting.
+      COMIC FURNITURE, and it is what keeps this a panel: outlined speech bubbles
+      with tails, soft cloud thought bubbles, bordered caption boxes, hand-drawn
+      Korean sound effects, drawn speed and focus lines.
+      NOT AI-LOOKING — these are the specific habits to avoid, and they matter
+      more than any single instruction above:
+        · No airbrushed plastic surfaces. Every shadow has a decided edge
+          somewhere. If nothing in the panel has a hard tonal boundary, redo it.
+        · No overall glow. No bloom, no haze, no lens flare, no light particles
+          scattered over the image, no glitter dusted across the frame.
+          Highlights are placed and countable.
+        · Detail is RANKED, never even: face and hair carry the most, costume
+          next, background least. Everything finished to the same pitch is the
+          single clearest tell.
+        · The face is not symmetrical and not blemish-free. Keep one asymmetry —
+          hair falling unevenly, one eye slightly narrowed, a scar, a mole, a
+          crooked collar.
+        · No gradient where a decision belongs. Prefer a step to a fade.
+        · Anatomy is checked, not implied: count fingers, keep both eyes on the
+          same line, keep jewellery and seams consistent left to right.
+      Ornate but cold, drawn but not painted, finished but not polished smooth.
+      Not photorealistic, not a 3D render, not a soft-focus digital painting, not
+      a warm pastel romance panel, not a centred cover illustration.
+
+    sd: >-
+      Korean webtoon chibi / super-deformed (SD) comedy style. The figure is 2-3
+      heads tall with a head as large as the whole body. The face is reduced to
+      the simplest possible shapes: huge round eyes taking up most of the face,
+      the nose a single dot or omitted, a tiny simple mouth, no jawline, no
+      realistic anatomy anywhere. Thick rough confident linework with obvious
+      width variation. Flat COLD colours — blue-grey, slate, pale cyan, ash
+      violet — with no gradient rendering and no warm tones. The background is a
+      plain cold wash with no setting or detail, scattered with a few small
+      snowflake, star or puff marks. Bouncy and comedic, but never cosy.
+      Deliberately far simpler and rougher than a normal panel — none of the
+      layered iris, none of the hair-strand work, none of the costume ornament.
+      Not detailed, not realistic.
+
+    emphasis: >-
+      Korean webtoon dramatic emphasis frame, drawn cold. The background is
+      removed entirely and replaced by radiating focus lines converging on the
+      figure. Very high contrast: one deeply saturated COLD accent — icy cyan,
+      electric blue, cold violet — against crushed near-black shadow, with a hard
+      cold rim light burning along the silhouette and through the separated hair
+      strands. Heavier and bolder linework than a normal panel. The eyes keep
+      their banded iris and their two hard highlights and catch the light hardest
+      of anything in frame; the lashes read as sharp individual spikes against
+      the light. The figure is isolated, cropped close and dominates the frame.
+      No setting, no scenery, no glow, no particles, no warm colour anywhere —
+      this panel hits harder than everything around it.
+
+  # 고급 모바일 게임 원화(2D 애니메이션 게임 일러스트). 로판·웹툰과는 다른
+  # 계열입니다 — 섬세한 애니메이션 선화, 은은하게 빛나는 채색, 정제된 조명이
+  # 정체성입니다. new_harness/prompt/style/game 과 같은 문구를 옮겨 왔습니다
+  # (2026-09-02, cinematic 을 옮긴 것과 같은 방식).
+  game:
+    normal: >-
+      HIGH-END 2D ANIME MOBILE GAME ILLUSTRATION STYLE Premium commercial 2D anime
+      game artwork. A refined, elegant, luminous Japanese/Korean mobile game
+      illustration aesthetic. The artwork should look like official high-budget 2D
+      mobile RPG character art. The visual identity should come primarily from
+      refined anime drawing, delicate linework, beautiful color design, soft
+      luminous rendering, precise facial construction, clean shapes, and
+      sophisticated lighting. NOT romance fantasy webtoon art. NOT manhwa. NOT
+      webtoon. NOT visual novel romance art. NOT comic art. NOT painterly fantasy
+      art. NOT 3D. LINEART Delicate, thin, clean anime lineart. Soft and controlled
+      contours. Elegant line weight variation. Lines should feel naturally
+      integrated with the coloring rather than appearing as strong graphic outlines.
+      Very subtle outlines around skin and facial features. Slightly more defined
+      contours around important silhouettes. Soft line transitions. Clean confident
+      drawing. No rough sketch appearance. No thick black outlines. The lineart
+      should remain delicate and understated. ANIME DRAWING STYLE Sophisticated
+      modern anime game character drawing. Refined mature anime aesthetic.
+      Beautifully constructed anime facial features. Elegant eyes with clean shapes.
+      Precise facial proportions. Delicate nose and mouth rendering. Clean
+      anatomical construction. Graceful stylized anatomy. The character should feel
+      professionally drawn rather than generically generated. Avoid exaggerated
+      webtoon facial proportions. Avoid overly simplified anime features. Avoid
+      realistic human rendering. COLORING Soft, luminous 2D anime game coloring.
+      Clean but slightly soft color transitions. Large areas of harmonious color.
+      Subtle cel shading combined with gentle gradients. Smooth tonal transitions.
+      Soft secondary shadows. Controlled highlights. Moderate rendering density.
+      Bright, clean overall color impression. Colors should feel slightly
+      translucent and luminous rather than heavy or muddy. Maintain clear local
+      colors underneath the shading. The image should remain distinctly 2D. LIGHTING
+      Soft atmospheric daylight. Gentle ambient illumination. Subtle rim lighting.
+      Soft reflected light. Light should naturally blend across the character and
+      environment. Gentle highlights rather than sharp specular effects. Soft
+      luminous edges. Moderate contrast. The lighting should create a delicate
+      glowing atmosphere without becoming magical or overly dramatic. No excessive
+      bloom. No intense lens flare. No harsh cinematic lighting. SKIN RENDERING Very
+      clean, pale anime-style skin rendering. Smooth soft gradients. Extremely
+      subtle shadows. Gentle tonal variation. Soft natural blush. Clean luminous
+      skin surfaces. No realistic pores. No photographic skin texture. No heavy
+      contour shadows. The skin should look softly illustrated rather than
+      airbrushed or realistic. HAIR RENDERING Hair should be constructed from large,
+      elegant anime shapes. Clear major hair masses. Smooth flowing forms.
+      Controlled layering. Natural overlapping sections. Selective fine strands only
+      around important edges and tips. Hair detail should gradually decrease toward
+      the interior. The overall hair silhouette must remain clean and readable. Hair
+      should feel soft and illustrated. The impression of detail should come from
+      shape design, layering, lighting, and selective strand accents. NOT from
+      thousands of individual strands. CLOTHING RENDERING Clean, professionally
+      designed 2D game-art clothing. Large readable fabric shapes. Smooth material
+      transitions. Controlled folds. Selective folds only where necessary to
+      describe form. Soft fabric shading. Clear silhouette. Simple large-scale
+      design language. Decorative details should be sparse and intentional. The
+      clothing should look sophisticated without becoming visually busy. Avoid
+      excessive tiny details. DETAIL DENSITY Moderate detail density. High polish
+      without micro-detail overload. Use detail selectively. Large shapes should
+      remain visually dominant. Fine details should only appear in focal areas. Do
+      not distribute equal amounts of detail across the entire image. The
+      illustration should look expensive because of drawing quality, shape design,
+      color harmony, lighting, and rendering control. NOT because of excessive
+      ornaments or microscopic details. COLOR PALETTE Elegant sophisticated color
+      relationships. Softly saturated colors. Rich but controlled colors. Clean
+      midtones. Gentle highlights. Subtle shadow colors. Slightly luminous overall
+      palette. Avoid muddy colors. Avoid excessively dark rendering. Avoid neon
+      colors. Avoid extreme saturation. Avoid excessive black. BACKGROUND STYLE
+      Softly rendered 2D anime game background. Large readable environmental shapes.
+      Atmospheric depth. Simplified architectural forms. Background detail should be
+      lower than character detail. Use soft lighting and subtle depth separation.
+      The environment should support the character rather than compete with it.
+      Avoid hyper-detailed concept-art backgrounds. Avoid hundreds of tiny
+      environmental objects. OVERALL VISUAL FEEL Delicate. Luminous. Elegant.
+      Sophisticated. Refined. Clean. Soft. Polished. Premium. Modern anime game
+      aesthetic. The illustration should have the delicate visual quality of a
+      high-budget mobile game character CG. The artwork should feel carefully
+      illustrated and art-directed. It should have a soft, beautiful, slightly
+      luminous finish. The image should feel detailed at first glance, but remain
+      structurally simple when examined closely. The visual complexity should come
+      from: drawing quality, anatomy, shape language, line quality, color harmony,
+      soft shading, lighting, and composition. Never increase visual quality by
+      adding unnecessary decoration. NEVER make the artwork visually busy. NEVER
+      make it look like a webtoon. NEVER make it look like a romance fantasy
+      illustration. NEVER make it look painterly. NEVER make it look 3D. The final
+      result should read immediately as: PREMIUM 2D ANIME MOBILE GAME CHARACTER ART.
+      네거티브 webtoon, Korean webtoon, manhwa, romance fantasy webtoon, romance fantasy
+      illustration, visual novel romance, comic, comic panel, comic page, storybook
+      art, 3D, 3D render, 3D model, CGI, PBR, photorealistic, hyperrealistic,
+      realistic human, photography, live action, oil painting, watercolor,
+      painterly, traditional painting, concept art painting, visible brush strokes,
+      thick black outlines, heavy outlines, bold graphic outlines, rough lineart,
+      sketchy lineart, messy linework, excessive detail, micro-detail, extreme
+      detail density, visual clutter, busy composition, overdesigned, overdecorated,
+      excessive ornaments, excessive jewelry, excessive embroidery, intricate
+      embroidery, excessive lace, intricate lace, tiny decorative patterns,
+      decorative patterns everywhere, excessive accessories, giant ornaments,
+      excessive gemstones, excessive filigree, excessive gold, thousands of hair
+      strands, individual hair fibers, realistic hair fibers, photographic hair
+      texture, hair texture overload, excessive strand separation, messy tangled
+      hair, excessive fabric folds, excessive seams, excessive clothing layers,
+      micro folds, muddy colors, dirty colors, crushed blacks, extremely dark
+      rendering, oversaturated colors, neon colors, harsh contrast, harsh shadows,
+      hard lighting, excessive bloom, excessive glow, lens flare, sparkles
+      everywhere, particle overload, flat primitive coloring, flat cel shading,
+      muddy shading, rough shading, over-rendered shading, realistic skin texture,
+      generic anime, western cartoon, chibi, super deformed, cartoon, AI collage,
+      visual noise, low quality, low resolution, blurry, muddy image
+
+  # 기존 실험에 쓰던 값. 지우지 마세요 — 이전 결과와 비교하려면 필요합니다.
+  # 문자열 하나만 쓰면 모든 render_style 이 그 문구를 씁니다.
+  flat: "Korean webtoon style, soft flat colors, thin clean lines, minimal shading"
+
+# -----------------------------------------------------------------------------
+# 컷마다 바뀌는 그림체
+#
+# 실제 웹툰은 한 화 안에서 그림체가 고정되지 않습니다. 진지한 컷은 정식 작화로,
+# 분위기 푸는 컷은 SD(2~3등신)로 그립니다. 그 전환 자체가 리듬입니다.
+# W7 이 컷마다 render_style 을 정하고(normal|sd|emphasis), 코드가 아래 문구를
+# style_suffix **바로 뒤**에 덧붙입니다. normal 은 덧붙이는 것이 없습니다.
+#
+# 시트 첨부는 sd 에서도 그대로 둡니다 — 같은 인물이라는 것은 시트가 잡아 주고,
+# 여기서는 등신만 바뀌기 때문입니다.
+# -----------------------------------------------------------------------------
+render_style_suffix:
+  normal: ""
+  sd: >-
+    Draw this panel in chibi / super-deformed style: 2-3 head-tall proportions,
+    simplified rounded face, oversized eyes, tiny hands, exaggerated pose. Soft
+    pastel background wash instead of a detailed background. Add cartoon effect
+    marks (sparkles, hearts, sweat drops, motion puffs). Keep the same character
+    identity, hair color, outfit colors and design details as the reference sheet.
+  emphasis: >-
+    Drop the background entirely: the character is isolated on a plain
+    high-contrast field with radiating speed lines converging on them. Strong rim
+    light, heavier line weight on the silhouette. Nothing else in frame.
+
+  # ★ bleed·breakout 이 여기 없던 동안, 컷 모드는 이 둘을 **조용히 무시했습니다.**
+  #   render_suffix() 가 모르는 값에 빈 문자열을 돌려주므로, 콘티가 통컷이라고
+  #   정한 컷이 평범한 컷으로 그려졌습니다. Scene 모드는 scene.panel_render 에
+  #   네 개를 다 갖고 있어서 그쪽만 동작했고, 그래서 "웹툰 연출이 안 보인다"가
+  #   컷 모드에서만 났습니다. RENDER_STYLES 는 다섯 개입니다 — 여기도 다섯 개여야
+  #   합니다. (2026-08-23: float 이 들어와 여섯 개가 됐습니다.)
+  bleed: >-
+    This is the full-bleed panel of the episode — the single biggest moment. The
+    artwork runs edge to edge with no border and no margin, continuing off all
+    four sides of the frame, and the subject is scaled up so it dominates
+    completely. Nothing is inset, nothing is framed. Compose it so the image
+    reads as cut off by the edges on purpose.
+  breakout: >-
+    Part of the subject breaks out of the panel: a hand, a weapon, hair, a spray
+    of debris crosses the edge of the frame and overlaps the empty space beside
+    it, while the rest of the figure stays inside. Draw that crossing element
+    fully, past the boundary, so the panel cannot contain it.
+
+  # 떠 있는 컷 — 칸도 배경도 없습니다. emphasis 와 반대 방향입니다: emphasis 는
+  # 배경을 지워서 **강조**하고(집중선·림라이트), float 은 **굳이 그릴 것이 없어서**
+  # 안 그립니다. 그래서 극적 장치를 하나도 넣지 않는 것이 중요합니다 —
+  # 집중선이 들어가는 순간 가벼운 컷이 아니라 센 컷이 됩니다.
+  float: >-
+    No panel and no background. The character floats on a plain flat field of a
+    single soft colour — bare white or a very light flat tone — with no horizon,
+    no floor, no furniture, no scenery and no perspective of any kind. Do NOT add
+    speed lines, focus lines, rim light, glow or any dramatic effect: this panel
+    is deliberately low-energy. At most a couple of small flat doodle marks
+    floating near the character (a question mark, a sweat drop, two or three tiny
+    stars or dots), drawn in the same ink as the figure. The figure is small in
+    the frame with generous empty space around it, and it is not cropped by any
+    border.
+
+# 프롬프트 조립은 코드가 강제합니다. 아래 placeholder 만 사용 가능:
+#   {appearance} {scene} {style} {extra}
+# {scene} 만 LLM 이 씁니다. 나머지는 전부 이 파일에서 옵니다.
+prompt_template: |
+  {appearance}
+
+  Scene: {scene}
+
+  {style}
+  {extra}
+
+# 모든 프롬프트 맨 끝에 붙는 추가 지시문. 기본은 비어 있습니다(= 스펙 그대로).
+# 말풍선/글자가 그려져 나오는 게 거슬리면 아래 줄을 켜세요. 단, 이것도 변수이므로
+# 조건 비교 도중에 바꾸면 안 됩니다.
+# global_suffix: "No text, no speech bubbles, no lettering, no watermark."
+global_suffix: ""
+
+# 컷당 생성 후보 장수. **기본은 1장입니다.**
+#
+# 후보를 여러 장 뽑는 것은 "그중에서 고르려고" 하는 일이고, 그건 조건 비교
+# 실험(A vs C vs D 중 어느 쪽이 일관된가)을 할 때만 의미가 있습니다. 한 화를
+# 만드는 것이 목적이면 고를 것이 없습니다 — 같은 프롬프트로 같은 모델에서 3번
+# 뽑아 봐야 미묘하게 다른 그림 3장이 나올 뿐이고 비용만 3배입니다.
+#
+# Scene 모드는 특히 그렇습니다. 한 장 안에 컷이 여러 개라 "이 장은 2번 컷은
+# 좋은데 3번 컷이 별로"가 되어서 장 단위로는 고를 수가 없습니다.
+#
+# 조건을 나란히 비교할 때만 올리세요:  --candidates 3
+# (Scene 모드는 아래 scene.candidates_per_scene 이 짝입니다. --candidates 는 둘 다 덮습니다.)
+# -----------------------------------------------------------------------------
+# 캐릭터 시트를 어떻게 쓸지 — 컷의 render_style 에 따라 다릅니다.
+#
+# 시트는 정식 작화(normal)로 그려져 있습니다. SD 컷에 그대로 붙이면 시트가
+# 이깁니다 — 얼굴이 SD 로 단순해지지 않고 정식 작화를 따라갑니다.
+# 그렇다고 빼 버리면 머리색·눈색·의상까지 잃어서 다른 사람이 됩니다.
+# 그래서 붙이되 "무엇만 보라"를 못박습니다.
+# refs 가 실제로 붙는 조건(C / C+ / D)에서만 쓰입니다.
+# -----------------------------------------------------------------------------
+sheet_notes:
+  sd: >-
+    For THIS panel, use the attached character sheet ONLY for hair colour, eye
+    colour, outfit colours and costume details. Do NOT copy its face drawing, its
+    line quality or its head-to-body proportions — this panel is chibi and its face
+    must be far simpler and its head far larger than the sheet.
+  emphasis: ""
+
+candidates_per_cut: 1
+
+# -----------------------------------------------------------------------------
+# Scene 모드 (--mode scene) — 컷 여러 개를 "웹툰 페이지 한 장"으로 통째로 생성
+#
+# 컷 모드: 컷 1개 = 이미지 1장. 컷 10개 x 후보 3장 = 30회 호출.
+# Scene 모드: 컷 3개 = 이미지 1장. Scene 4개 x 후보 3장 = 12회 호출.
+# 두 모드는 나란히 비교하려고 만든 것이므로 외형/스타일 문구는 완전히 같습니다.
+# 달라지는 것은 "패널 여러 개 + 레이아웃 지시" 뿐입니다.
+# -----------------------------------------------------------------------------
+scene:
+  # Scene 경계는 연출(W7.5)이 정합니다 — ep{NN}_direction.json 의 scene_break.
+  # beat 가 hold/turn 으로 끝나는 자리에서 끊으므로 묶음 크기가 고르지 않습니다
+  # (3+3+3+1 이 아니라 2+4+3+1 같은 식). 그게 의도입니다.
+  #
+  # 아래 값은 **연출이 없는 run 의 예비 경로**입니다. 연출이 있으면 무시됩니다.
+  # ---------------------------------------------------------------------------
+  # 무엇이 장의 경계를 정하는가
+  #
+  #   rhythm (기본)  연출(W7.5)의 scene_break 가 정합니다. beat 가 hold/turn 으로
+  #                  끝나는 자리에서만 끊기므로 묶음 크기가 고르지 않습니다
+  #                  (4+4+2+2 같은 식). 화면 한 번이 끝날 때마다 작은 궁금증이
+  #                  남는 것이 이 방식의 이유입니다.
+  #   fixed          연출이 있어도 **개수로 자릅니다** (아래 cuts_per_scene).
+  #                  한 장에 정확히 N컷이 필요할 때만 쓰세요.
+  #
+  # ★ 상한(max_cuts_per_scene)으로는 "N컷씩"이 안 됩니다. 상한은 큰 묶음을
+  #   **고르게** 쪼개므로 4컷 묶음에 상한 3을 걸면 3+1 이 아니라 2+2 가 되고,
+  #   리듬이 2씩 끊어 놓은 자리는 상한을 올려도 2로 남습니다. 실제로 12컷짜리
+  #   한 화가 상한 3에서 2,2,2,2,2,2 로 나왔습니다.
+  #
+  # 대가: 개수로 자르면 경계가 아무 데나 떨어집니다 — 설명하다 만 자리에서
+  # 화면이 넘어갈 수 있습니다. 그래서 기본은 rhythm 입니다.
+  #
+  # 값을 바꾸면 scenes.json 캐시가 자동으로 무효화됩니다.
+  grouping: rhythm          # rhythm | fixed | weight
+
+  # ---------------------------------------------------------------------------
+  # weight — 컷의 **무게**가 묶음을 정합니다 (개수 규칙이 아예 없습니다)
+  #
+  # "한 장에 3컷" 도 "한 컷에 한 장" 도 둘 다 임의의 규칙이었습니다. 3컷씩 묶으면
+  # 배경이 있는 컷 셋이 한 캔버스에 들어가 격자가 되고, 1컷씩 뽑으면 스쳐 가는
+  # 리액션 한 컷이 절정 컷과 같은 지면·같은 비용을 먹습니다. 실제 웹툰에서 컷의
+  # 무게는 균일하지 않으므로, 묶음도 균일할 이유가 없습니다.
+  #
+  # 콘티(W7.5)가 컷마다 계산해 보내는 weight 를 그대로 따릅니다:
+  #
+  #   full   통컷(bleed)이거나 size 가 impact 인 컷 → 혼자 한 장
+  #   normal 보통 컷                                → 혼자 한 장 (컷 모드와 같음)
+  #   light  떠 있는 컷(render_style: float)        → 연달아 붙은 것끼리 한 장
+  #
+  # light 만 묶이는 이유는 **배경이 없어서 나눌 배경도 없기 때문**입니다. 배경이
+  # 있는 컷 둘을 한 캔버스에 넣으면 모델이 그 사이에 경계를 그려서 격자가 되는데,
+  # 단색 위에 떠 있는 SD 인물 둘은 나란히 놓아도 그냥 한 그림입니다.
+  #
+  # weight 가 없는 옛 화는 전부 normal 로 읽히므로 컷 하나당 한 장 — 즉 컷 모드와
+  # 같은 결과가 됩니다.
+  max_light_per_scene: 3    # 한 장에 묶을 light 컷 상한. 넷을 넘기면 인물이 작아집니다
+
+  # 꺼져 있으면(기본, 예전과 동일) light 컷만 서로 묶이고 normal 은 혼자 한
+  # 장입니다. 켜면 normal 도 light 와 똑같이 묶입니다 — 실측해 보니 콘티가
+  # float(=light)를 거의 안 써서 컷 대부분이 normal 로 남고, 그러면 위
+  # grouping: weight 가 사실상 컷 모드(한 컷 = 한 장)와 같아져 버렸습니다
+  # (2026-08-27). "무거운(full) 컷만 혼자, 나머지는 합쳐서"가 원래 의도였던
+  # 화면은 이 값을 켭니다.
+  weight_combine_normal: false
+
+  # 떠 있는 컷이 쓰는 지면 폭 (0~1). 가벼운 컷은 지면을 덜 먹는 것이 곧 가볍다는
+  # 뜻이라 좁힙니다. light 가 아닌 컷은 아래 width_ratio 를 따릅니다.
+  light_width: 0.55
+
+  # size 별로 지면 폭을 좁히고 싶을 때만 씁니다 (예: {tall: 0.8}).
+  # 비워 두면(기본) 전부 1.0 = 꽉 채웁니다. 모든 컷을 똑같이 조금 비우는 것은
+  # 꽉 채우는 것만큼이나 기계적이라, 기본은 비워 둡니다 — 폭의 변화는 이미
+  # 컷마다 다른 캔버스 비율(16:9 / 4:3 / 3:4 / 9:16)에서 나옵니다.
+  width_ratio: {}
+
+  # 장(Scene) 사이를 이을 때 gap_after·weight 를 실제로 반영할지 (episode.stitch).
+  #
+  # gap_after(컷 사이 여백 0~3)는 연출이 있는 run 이면 **늘 계산돼 있습니다**
+  # (derive_layout). 그런데 episode.stitch 는 지금까지 이 값을 안 읽고 장을
+  # 무조건 틈 없이 붙였습니다 — 컷 모드(write_strip)는 지키는 여백 리듬이 장
+  # 모드에서만 사라지는 자리였습니다. 켜면 장과 장 사이에도 컷 모드와 같은
+  # 눈금(위 gap_ratio)으로 여백이 생기고, weight: light 인 장은 위 light_width
+  # 로 좁아집니다.
+  #
+  # ⚠️ **기본은 꺼짐입니다.** gap_after 가 이미 모든 run 에 있으므로, 이걸 켜
+  # 두면 예전에 뽑아 둔 화도 다시 이으면 갑자기 여백이 생겨 harness-is-final
+  # 원칙(예전 run 재현)을 어깁니다. landing 의 "웹툰" 연출만 켭니다.
+  stitch_gaps: false
+
+  # ---------------------------------------------------------------------------
+  # 컷 사이 여백의 크기 (컷 모드 PNG 조립 — strip.stitch_strip)
+  #
+  # 콘티가 컷마다 정해 둔 gap_after(0~3)를 **몇 px 로 그릴지**입니다. 값은 지면
+  # 폭 대비 비율이라, 폭이 800px 이면 0.16 은 128px 입니다.
+  #
+  # 기본은 {0: 0.0, 1: 0.07, 2: 0.26, 3: 0.62} = 0 / 56 / 208 / 496px 입니다.
+  # 세로 스크롤 작법이 쓰는 눈금(800px 폭 기준)은 이보다 넓습니다:
+  #
+  #     빠른 동작·추격   100–150px    엄지가 안 멈춘다
+  #     감정 리액션      200–300px    한 박자 쉬고 다음 컷이 들어온다
+  #     장면 전환        400–600px    낮에서 밤으로, 다른 장소로
+  #     낙차·클리프행어  600–800px    화면이 통째로 비고 다음 컷이 나온다
+  #
+  # 양 끝이 특히 어긋납니다. 1(56px)은 "붙인 것"과 눈으로 구분이 안 가고,
+  # 3(496px)은 폰 화면 하나를 못 채워서 낙차가 아니라 "조금 넓은 여백"이 됩니다.
+  # 뷰어는 3 을 이미 80vh(화면 하나)로 그리고 있어서, 같은 화를 뷰어로 볼 때와
+  # PNG 로 볼 때 호흡이 서로 달랐습니다.
+  #
+  # 아래처럼 켜면 위 눈금에 맞습니다 (800px 폭에서 0 / 128 / 256 / 720px):
+  #
+  #     gap_ratio: {0: 0.0, 1: 0.16, 2: 0.32, 3: 0.90}
+  #
+  # ⚠️ 위 눈금은 작법서의 픽셀 값 그대로인데, 그 값들은 화면이 지금보다 짧던
+  #    시절에 잡힌 것입니다. 요즘 폰(19.5:9)에서 폭 800px 캔버스의 한 화면은
+  #    캔버스 좌표로 1700px 쯤이라, 720px 은 화면 하나가 아니라 **화면의 약 40%**
+  #    입니다. 뷰어는 같은 자리를 80vh(화면 하나)로 그리므로 뷰어 쪽이 여전히
+  #    더 크게 뜸을 들입니다. 낙차를 폰 화면 하나로 맞추려면 3 을 1.8 쯤으로
+  #    올리세요 — 대신 화 전체 길이가 눈에 띄게 늘어납니다.
+  #
+  # 비워 두면(기본) 예전 값 그대로라, 이미 뽑아 둔 화의 PNG 가 안 바뀝니다.
+  # 적어 놓은 칸만 갈아 끼웁니다 — {3: 0.90} 만 적으면 나머지 셋은 기본값입니다.
+  gap_ratio: {}
+
+  cuts_per_scene: 2         # 몇 컷을 한 장에 묶을지. 컷 10개면 2+2+2+2+2 = Scene 5개
+  candidates_per_scene: 1   # Scene 당 생성 후보 장수 (위 candidates_per_cut 과 같은 이유로 1)
+
+  # 한 장에 들어갈 수 있는 컷 수의 **상한**. 연출이 있는 run 에도 걸립니다.
+  #
+  # 위의 cuts_per_scene 은 연출(W7.5)이 없을 때만 쓰입니다. 연출이 있으면
+  # scene_break 가 경계를 정하는데, 그러다 한 장에 4컷이 몰리면 9:16 캔버스로도
+  # 격자가 됩니다 — 실제로 그렇게 나왔습니다. 리듬이 정한 경계는 그대로 두고
+  # 너무 커진 묶음만 잘라 나눕니다 (뒤쪽 컷을 온전히 남기려고 앞에서부터).
+  #
+  # 0 이면 자르지 않습니다 (예전 동작).
+  #
+  # ★ 이 값의 상한을 정하는 것은 **캔버스 비율**이지 해상도가 아닙니다.
+  #
+  # 6 으로 올려 봤다가 3 으로 내렸습니다. 6 은 이음매를 줄이지만 한 장이
+  # 격자(만화책 페이지)가 되어 버립니다 — "패널 테두리를 그리지 마라"를 세 번
+  # 말해도 흰 여백과 테두리가 나옵니다.
+  #
+  # image_size 를 올리는 것으로는 해결되지 않습니다. 실측(2026-08):
+  #     gemini-3-pro-image-preview · 9:16
+  #     1K 768x1376 · 2K 1536x2752 · 4K 3072x5504  — 전부 세로/가로 1.79
+  # 픽셀만 늘고 **캔버스 모양은 같습니다.** 모델이 컷을 배치할 때 보는 것은
+  # 픽셀 수가 아니라 1.79배짜리 직사각형입니다.
+  #
+  # 더 긴 비율도 없습니다. 1:2 · 9:21 · 1:3 · 2:5 · 1:4 · 1:5 는 전부 400 이고
+  # ("Aspect ratio 1:4 is not supported for this model"), gemini-2.5-flash-image
+  # 도 9:16 까지입니다. **9:16 이 천장입니다.**
+  #
+  # 그래서 한 장에 넣을 수 있는 컷 수는 산수로 정해집니다 (9:16 을 N등분):
+  #     2컷 → 각 0.89배(거의 정사각)   3컷 → 각 0.60배
+  #     4컷 → 각 0.45배 (격자가 나오기 시작한 지점)
+  #     6컷 → 각 0.30배 (가로 3.3배 띠라 얼굴이 안 들어감)
+  #
+  # 3 은 이음매와 격자 사이의 타협점입니다. 격자가 또 나오면 2 로 내리세요.
+  max_cuts_per_scene: 4
+
+  # 개수 대신 **캔버스에 들어가는 만큼** 묶는다 (기본 꺼짐 — 옛 화는 그대로).
+  #
+  # 위의 산수를 보면 개수라는 기준 자체가 이상하다. 같은 3컷이라도 wide 셋은
+  # 세로 1.69배라 9:16 안에 넉넉히 들어가고, tall 셋은 4배라 한참 넘친다.
+  # 넘치면 모델이 남는 폭에 컷을 나란히 놓는다 — 세로 스크롤이 아니라 만화
+  # 페이지가 되는, 위에서 "격자"라고 부른 그 자리다.
+  #
+  # 켜면 컷의 size 로 필요한 세로를 재서, 다음 컷을 넣어도 9:16 안에 들어가면
+  # 넣고 넘치면 거기서 끊는다. 그래서 장마다 컷 수가 다르다 — impact 는 혼자
+  # 한 장, wide 둘은 한 장. 개수를 정하는 자리가 아예 없어진다.
+  #
+  # rhythm(연출 기준) 묶음에만 적용된다. 이야기 경계(scene_break)를 먼저
+  # 지키고 그 안을 다시 나눈다 — 콘티가 한 화면이라고 한 자리를 캔버스 사정으로
+  # 넘어가지 않기 위해서다. size 를 아무 컷도 안 적은 화는 잴 것이 없어 건너뛴다.
+  fit_to_canvas: false
+
+  # --verify-all 전용 후보 수. 여기만 2장인 이유가 있습니다 — 통합 검증은 후보를
+  # 고르려는 게 아니라 "같은 지시로 뽑아도 규칙대로 나오는가"를 재는 것이고,
+  # 편차를 보려면 최소 2장이 필요합니다. 본 생성(1장)과는 목적이 다릅니다.
+  verify_candidates_per_scene: 2
+  layout_pick: cycle        # cycle(순서대로 순환) | random(run_id 로 고정된 난수)
+
+  # 프롬프트 조립은 코드가 강제합니다. 아래 placeholder 만 사용 가능:
+  #   {appearance} {panel_count} {panels} {layout} {style} {extra}
+  # {panels} 안의 각 패널 서술만 LLM 이 씁니다. 나머지는 전부 이 파일에서 옵니다.
+  # 말풍선 금지 문구는 코드가 맨 끝에 항상 붙입니다 (config 로 끌 수 없습니다).
+  prompt_template: |
+    {appearance}
+
+    ONE continuous vertical webtoon illustration built from {panel_count} overlapping
+    elements, read top to bottom as the reader scrolls. Not a comic book page, not a
+    row of framed panels.
+    {panels}
+
+    Panel layout:
+    {layout}
+
+    {style}
+    {extra}
+
+  # style_contract 가 v2 일 때만 쓰는 템플릿 (v1 이면 위엣것 그대로).
+  #
+  # 왜 갈랐나 — 위 템플릿의 "Not a comic book page, not a row of framed panels"
+  # 이 **컷 분할 자체를 죽이고 있었습니다.** 바로 아래 {layout} 에는 콘티가 정한
+  # "three horizontal panels stacked with thin white gutters" · "a full-bleed
+  # background panel with a circular inset overlapping" 같은 지시가 들어가는데,
+  # 그 위에서 "테두리 있는 컷 만들지 마라" 고 하니 모순입니다. 모델은 뒤에 읽은
+  # 금지를 따르고, 결과가 컷 구분 없는 통짜 한 장이 됩니다 — 아무리 잘 그려도
+  # 웹툰이 아니라 일러스트 한 장으로 읽힙니다.
+  #
+  # 원래 의도(세로 스크롤은 종이 만화책 격자가 아니다)는 맞습니다. 너무 세게
+  # 말한 것이 문제라, 여기서는 **격자 강제**와 **통짜 병합**을 둘 다 막고
+  # 레이아웃을 따르라고만 합니다. full-bleed 컷은 그대로 허용됩니다.
+  prompt_template_v2: |
+    {appearance}
+
+    ONE vertical webtoon page: {panel_count} moments read top to bottom as the
+    reader scrolls.
+    FOLLOW THE PANEL LAYOUT BELOW EXACTLY. It decides how many framed panels
+    there are, how they sit, and where they overlap. A panel the layout frames
+    gets a clean drawn border with a white gutter beside it; a panel the layout
+    calls full-bleed fills the width edge to edge with no border at all.
+    Do NOT impose a uniform paper-comic grid, and do NOT merge everything into
+    one single undivided illustration — either one throws away the layout.
+    {panels}
+
+    Panel layout:
+    {layout}
+
+    {style}
+    {extra}
+
+  # ---------------------------------------------------------------------------
+  # 글자를 누가 그리는가
+  #   in_image  대사·나레이션·속마음까지 모델이 그림 안에 직접 그립니다.
+  #             효과음을 이미 그렇게 맡기고 있으므로 같은 논리입니다.
+  #             한글이 깨질 수 있고, 깨지는지는 뽑아 봐야 압니다.
+  #   overlay   말풍선은 빈 껍데기로 그리고 글자는 뷰어가 얹습니다(예전 방식).
+  #             한글이 절대 안 깨지지만 말풍선 모양과 글자가 따로 놉니다.
+  # 깨지면 overlay 로 되돌리면 됩니다 — 프롬프트도 같이 바뀝니다.
+  #
+  # 효과음도 이 값을 따릅니다. 예전에는 모드와 무관하게 언제나 이미지에
+  # 구웠는데(그림에 녹아드는 레터링이라는 이유), 그러면 overlay 로 돌려도
+  # 한글이 깨질 수 있는 자리가 하나 남습니다.
+  # ---------------------------------------------------------------------------
+  #   none      말풍선조차 그리지 않습니다. 그림만 나오고 글자는 전부 후처리입니다.
+  #
+  # ── none 으로 둔 이유 ──────────────────────────────────────────────────────
+  # 액션 컷에서 풍선과 효과음 레터링이 그림에 구워지면, 그 컷은 "한 순간의
+  # 그림"이 아니라 **완성된 만화 페이지**가 됩니다. 실제로 그렇게 나왔습니다 —
+  # 큼직한 효과음 레터링이 화면을 가로지르고 나레이션 띠가 아래를 덮어서,
+  # 독자가 먼저 읽는 것이 동작이 아니라 글자였습니다.
+  #
+  # 자리는 그대로 비웁니다. bubble_zone(컷의 어느 쪽을 비울지)은 none 에서도
+  # 살아 있어서, 나중에 글자를 얹을 공간이 컷 안에 확보됩니다.
+  #
+  # 대사를 그림에 굽고 싶으면 in_image 로 되돌리세요. 한글은 안 깨집니다
+  # (컷 모드·Scene 모드 양쪽에서 확인했습니다).
+  lettering: in_image
+
+  # ---------------------------------------------------------------------------
+  # 화면 안 글자 (screen_text) — **언제나 합성입니다.** 여기는 선택지가 없습니다.
+  #
+  # 이미지 모델은 한글 UI 를 못 그립니다. 단톡방 문구를 서술로 넘겼더니 글자가
+  # 아예 안 나오거나 뭉개진 획이 나왔습니다. 그래서 화면은 **비워 그리게 하고**
+  # 글자는 뷰어가 얹습니다 — lettering 이 in_image 여도 마찬가지입니다.
+  #
+  # 아래 값은 "어떤 화면인가"의 기본 표현입니다. 컷 서술이 더 구체적이면
+  # 그쪽이 이깁니다.
+  # ---------------------------------------------------------------------------
+  screen_ui_hint: a phone screen
+
+  # ---------------------------------------------------------------------------
+  # 말풍선 모양 — 감정과 상황에 따라 코드가 고릅니다.
+  #
+  # 고르는 순서: 컷에 bubble_shape 필드가 있으면 그것 / 없으면 아래 규칙
+  #   narration 필드      -> narration
+  #   thought 필드        -> thought
+  #   reader_only 컷      -> flashback
+  #   대사에 ! 가 있음     -> shout
+  #   대사가 … 로 흐리거나 (소괄호)로 감싸짐 -> whisper
+  #   그 밖                -> normal
+  # ---------------------------------------------------------------------------
+  bubbles:
+    normal: >-
+      a rounded oval speech bubble with a smooth clean outline and a short tail
+      pointing at the speaker
+    shout: >-
+      a jagged explosive speech burst with sharp spikes all around it and a thick
+      heavy outline, larger than a normal bubble
+    whisper: >-
+      a small speech bubble with a fine dotted outline and no solid fill
+    thought: >-
+      a soft cloud-shaped thought bubble with a scalloped edge, with three small
+      round bubbles trailing from it toward the character
+    narration: >-
+      a caption with no box and no outline at all, the text set directly onto the
+      artwork with a soft shadow so it stays readable
+    flashback: >-
+      a speech bubble with a faded blurred outline that dissolves at the edges
+
+  # ---------------------------------------------------------------------------
+  # 효과음 — 그림의 일부입니다.
+  #
+  # **낱말만** 코드가 보장합니다 (한글이 정확해야 하고 굽기 전에 확인되어야
+  # 하므로). 어떻게 생겼는지는 scene_gen 이 씁니다.
+  #
+  # 예전에는 아래 표를 beat 로 골라 박았습니다. 그런데 beat 는 이야기의 리듬이지
+  # 소리가 아닙니다 — "쿵" 과 "톡톡톡" 이 같은 beat 에 있으면 같은 레터링을
+  # 받았습니다. 어떤 소리인지 아는 것은 그 패널을 쓰는 쪽뿐입니다.
+  #
+  # **아래 값은 지금 쓰이지 않습니다.** 어휘 감각을 남겨 두려고 지우지 않았을
+  # 뿐이고, 여기를 고쳐도 그림은 안 바뀝니다. 실제 지시는
+  # prompts/scene_gen.txt 의 5.1 에 있습니다.
+  # ---------------------------------------------------------------------------
+  sfx_styles_unused:
+    default: >-
+      large stylized Korean sound-effect lettering worked into the artwork,
+      tilted off the horizontal, with a coloured fill and a white outline
+    turn: >-
+      enormous Korean sound-effect lettering in bold white with a heavy black
+      outline, tilted and distorted in perspective, breaking out past the edge of
+      its element and overlapping whatever is next to it
+    hold: >-
+      small thin faint Korean sound-effect lettering, low contrast, tucked into a
+      corner
+    release: >-
+      Korean sound-effect lettering in a warm saturated colour with a soft glow
+      spreading from it
+    sd: >-
+      bouncy rounded Korean sound-effect lettering in bright candy colours with a
+      thick white outline, with small stars, hearts and sparkles scattered around it
+    emphasis: >-
+      Korean sound-effect lettering blown up to fill a large part of the element,
+      in a saturated accent colour with a white outline, streaking diagonally
+
+  # ---------------------------------------------------------------------------
+  # 화면 보정 — **문구가 아니라 어휘를 줍니다.**
+  #
+  # 예전에는 beat 마다 고정 문구를 코드가 박았습니다. 13컷짜리 한 화에 같은
+  # 문장이 4번·3번·3번 그대로 반복됐습니다 — build 비트면 무조건 "a soft
+  # vignette and directional light raking across this element" 였습니다.
+  # 같은 비트라도 캠퍼스 잔디밭과 밤 복도는 다른 보정을 받아야 하는데, 코드는
+  # 그 차이를 모릅니다. mood 와 무슨 일이 벌어지는지를 아는 것은 scene_gen
+  # 뿐이라 그쪽으로 넘겼습니다.
+  #
+  # intents  : 이 비트가 화면에서 **무엇을 하려는 것인가**. 문구가 아니라 목적입니다.
+  #            빈 값은 "보정하지 않는다" 입니다.
+  # toolbox  : 쓸 수 있는 것들. 목록에서 고르라는 뜻이 아니라 "이런 것들이 있다"
+  #            입니다. 여기 없는 것을 써도 됩니다.
+  #
+  # 컷에 treatment 필드가 있으면 그것이 이깁니다 (연출이 직접 지정한 경우).
+  # ---------------------------------------------------------------------------
+  treatment_guide:
+    intents:
+      setup: ""
+      build: "quietly tighten the frame — the reader should feel something coming"
+      turn: "the hardest hit on the page; nothing else may compete with it"
+      release: "let the air back in and let the tension drain out"
+      hold: "stop time; the reader should sit in this one a beat longer"
+    toolbox: >-
+      vignette, raking or directional light, rim light, lens bloom, flare,
+      shallow focus, blown-out or drained background, radial focus lines, speed
+      lines, halftone, film grain, desaturation toward monochrome, a single
+      saturated accent against muted surroundings, heavy shadow, silhouette,
+      backlight, colour temperature shift (warm/cold), light through haze or dust
+
+  # ---------------------------------------------------------------------------
+  # 화면 구성 — 패널을 쌓지 않고 겹칩니다.
+  #
+  # 가장 큰 컷 하나가 시트 전체를 덮는 바탕이 되고, 나머지가 그 위에 테두리 없이
+  # 떠서 서로 겹칩니다. slots 는 떠 있는 요소들이 순서대로 앉는 자리입니다.
+  # ---------------------------------------------------------------------------
+  composition:
+    base: >-
+      fills the ENTIRE sheet edge to edge as the bottom-most layer, with no border
+      or frame of any kind. Its background — sky, light, smoke, cloth, hair — runs
+      behind every other element and bleeds off all four edges
+
+    # 바탕 컷에만 붙는 한 줄. 크기 지시 뒤에 "볼 것을 넣어라" 를 붙입니다.
+    #
+    # 근거: Ikuta et al.(2023, Sci Rep) — 패널 시청 시간은 이미지 크기가 아니라
+    # **말풍선 텍스트 길이**에 비례합니다. "큰 컷 = 느린 템포" 는 부분적 통념이고,
+    # 대형컷으로 독자를 붙잡으려면 시각 정보 밀도를 같이 올려야 합니다. 크게만
+    # 만들면 그냥 지나갑니다 (story-harness/docs/webtoon_directing_reference.md).
+    base_density: >-
+      This is the panel the reader is meant to stop at, so give them something to
+      look at: the richest lighting, the deepest atmosphere and the most rendered
+      detail on the sheet. Size alone does not hold a reader — density does
+    slots:
+      - >-
+        sits high on the sheet toward the left, about 55% of the sheet width, its
+        lower edge dissolving softly into the layer beneath instead of ending on a line
+      - >-
+        sits on the right at mid height, about 60% of the sheet width, overlapping
+        the element above it so the two share a corner
+      - >-
+        sits low on the left, about 50% of the sheet width, its upper edge tucked
+        underneath the element above it
+      - >-
+        spans almost the full width near the bottom, its upper edge partly covered
+        by the element above it
+    rules: >-
+      This is ONE continuous illustration, not a row of stacked panels. There are no
+      panel borders, no frames, no gutters and no white separator strips anywhere.
+      The elements overlap each other and melt into the base layer: edges fade,
+      figures break out past the edge of their own element and cross over the ones
+      beside them, and a face or silhouette from one element may run underneath the
+      others as part of the background. Keep the reading order flowing from the top
+      of the sheet to the bottom. Vary the sizes exactly as given — never make the
+      elements equal.
+      CRITICAL — THIS SHEET IS A SEGMENT, NOT A PAGE. It will be joined directly to
+      the sheet above and the sheet below with no gap at all, and the reader scrolls
+      through all of them as one continuous strip. Therefore: artwork must run all
+      the way to the very top edge and the very bottom edge of the sheet. No white
+      margin, no border, no letterboxing, no rounded corners, nothing framing the
+      sheet. Do not compose it as a self-contained picture that resolves inside its
+      own rectangle — the image is cut off at top and bottom on purpose, and must
+      look cut off, the way a strip of film does.
+
+  # ---------------------------------------------------------------------------
+  # 예전 웹툰 레이아웃 — w7 의 size 를 패널 높이·폭으로 옮깁니다.
+  #
+  # 우리가 만드는 건 만화 페이지가 아니라 웹툰입니다. 한 장에 굽는 것은 그대로
+  # 두되(그림체 일관성·배경 연결에 유리), 그 안은 균등한 가로 띠가 아니라
+  # 세로 스크롤처럼 나와야 합니다.
+  #
+  # height : 패널 높이의 상대 가중치. 합으로 나눠 %로 바꿔 프롬프트에 넣습니다.
+  #          값이 다르기만 하면 되므로 절대값에는 의미가 없습니다.
+  #          여백을 절대 픽셀(100~800px)로 다루지 않는 것은 의도적입니다 —
+  #          그 수치는 실무 경험칙이지 검증된 값이 아니고 기기마다 다릅니다
+  #          (story-harness/docs/webtoon_directing_reference.md 의 Caveats).
+  #
+  # width  : **지금은 쓰이지 않습니다.** 위의 composition(겹치는 배치)이 이 자리를
+  #          대신하면서 slots 가 폭과 위치를 함께 말합니다. 둘 다 넣으면 "화면
+  #          폭의 55%" 와 "full bleed" 가 한 프롬프트에서 부딪힙니다.
+  #          코드가 읽는 것은 height 뿐입니다. 여기를 고쳐도 그림은 안 바뀝니다.
+  # ---------------------------------------------------------------------------
+  panel_style:
+    wide:
+      height: 0.6
+      width: "spanning the full canvas width, bleeding off both edges"
+    normal:
+      height: 1.0
+      width: "spanning the full canvas width"
+    tall:
+      height: 1.7
+      width: >-
+        inset and clearly narrower than the canvas, centred with generous empty
+        margins on the left and right
+    impact:
+      height: 2.4
+      width: >-
+        full bleed, filling the entire canvas width and running off both edges
+
+  # render_style 별 패널 단위 지시. Scene 모드는 한 장 안에 컷이 여러 개라
+  # 페이지 전체 문구(render_style_suffix)로는 "이 패널만 SD" 를 말할 수 없습니다.
+  panel_render:
+    sd: >-
+      This panel is drawn chibi / super-deformed (2-3 heads tall), with no frame
+      at all: it floats directly on a soft pastel wash, with small stars, hearts
+      and sparkle marks scattered around it
+    emphasis: >-
+      This panel has no background: the figure is isolated on a high-contrast
+      field with radiating speed lines converging on them
+    # 통컷 — 콘티가 화당 한 번만 허용하는 카드입니다. 이 화에서 가장 큰 순간에만
+    # 붙고, 그 앞 여백도 콘티가 최대로 벌려 둡니다.
+    bleed: >-
+      This panel is the full-bleed moment of the episode: it runs edge to edge with
+      no border and no surrounding margin, its artwork continuing off all four sides
+      of the sheet, and every other element sits on top of it
+    # 칸 밖으로 — 피사체 일부가 테두리를 뚫고 여백으로 넘어옵니다. 세로 스크롤에서만
+    # 되는 연출이라 웹툰다움의 핵심이고, 화당 두 번까지입니다.
+    breakout: >-
+      Part of this panel's subject breaks past its own boundary and overlaps the
+      empty space beside it — a hand, a weapon, hair or spray crossing the edge —
+      while the rest of the figure stays inside
+    # 떠 있는 컷 — sd 와 비슷해 보이지만 방향이 다릅니다. sd 는 파스텔 워시라도
+    # 배경이 남고, float 은 아무것도 없습니다. 그리고 **작습니다** — 이 컷이
+    # 가벼운 컷이라는 것은 지면을 덜 먹는다는 뜻입니다.
+    float: >-
+      This panel is a light throwaway beat: the figure is drawn chibi /
+      super-deformed (2-3 heads tall), small, with no frame and no background at
+      all — just bare flat colour around it, no horizon, no floor, no scenery.
+      It takes up only about half the sheet width, centred, with generous empty
+      space on both sides, and carries no speed lines, focus lines or glow. At
+      most two or three tiny flat doodle marks float beside it
+
+  # 패널 배치 전체에 걸리는 규칙. 코드가 패널별 줄 뒤에 그대로 붙입니다.
+  layout_rules: >-
+    Do not draw panel borders, frames, outlines or white gutters between panels.
+    The panels touch each other directly and flow into one another as one
+    continuous vertical image. Let figures break past a panel boundary and
+    overlap into the panel above or below, and let backgrounds — light, smoke,
+    sky, cloth — run across boundaries without stopping. The panel heights must
+    follow the percentages given above and must never be equal. This is a
+    vertical scrolling webtoon, not a comic book page.
+    Framing: when a panel is described as a close-up or an extreme close-up, the
+    face fills most of that panel and the expression is unmistakable — do not pull
+    back and leave the figure small inside the frame. Only panels described as
+    establishing or full-body shots may show the whole figure.
+
+  # 예비 경로 — w7 이 size 를 주지 않는 예전 run 에서만 쓰입니다.
+  # size 가 있으면 위의 panel_style 로 매번 새로 만들고 아래는 무시됩니다.
+  layout_templates:
+    - "three horizontal panels stacked with thin white gutters, equal heights"
+    - "diagonal panel borders, the middle panel tilted, gutters cutting across the page"
+    - "a large establishing panel on top, two narrow panels below it side by side"
+    - "a full-bleed background panel with a circular inset close-up overlapping its lower right"
+    - "the character breaking the frame, one arm and shoulder crossing over the panel border into the panel below"
+    - "one tall vertical panel on the left, two stacked panels on the right, no gutter between them"
+
+# -----------------------------------------------------------------------------
+# 이미지 생성 provider
+# -----------------------------------------------------------------------------
+provider:
+  name: gemini              # providers/ 에 등록된 이름 (gemini | openai | mock)
+  api_key_env: GEMINI_API_KEY
+  model_env: GEMINI_IMAGE_MODEL       # .env 에서 읽을 이미지 모델 이름
+  cost_per_image_usd: 0.134           # 이미지 1장당 추정 단가. 요금표 바뀌면 여기만 수정
+  #
+  # ★ 여기를 안 고치고 **.env 한 줄로** 갈아탈 수 있습니다:
+  #     WEBTOON_IMAGE_PROVIDER=openai
+  #   그러면 api_key_env·model_env·cost_per_image_usd 도 그 provider 것으로
+  #   함께 바뀝니다 (OPENAI_API_KEY · OPENAI_IMAGE_MODEL · 0.041).
+  #   이름을 직접 정하려면 WEBTOON_IMAGE_KEY_ENV / WEBTOON_IMAGE_MODEL_ENV.
+  #
+  # ★ 아래 options 는 **Gemini 기준**입니다. openai 로 갈아타면:
+  #     · aspect_ratio → 가장 가까운 크기로 바뀝니다 (9:16 → 1024x1536).
+  #       정확히 그 비율이 아니라서 캔버스 모양이 미묘하게 달라집니다.
+  #     · image_size(1K/2K/4K) · response_modalities → 없는 개념이라 무시됩니다.
+  #       대신 quality: low|medium|high 가 그 자리입니다 (기본 medium).
+  #     · seed → OpenAI 이미지 API 에는 없습니다. 시드 재현은 Gemini 전용이고,
+  #       값이 있으면 무시하면서 경고를 한 번 찍습니다.
+  options:
+    # generationConfig 로 그대로 전달됨. 모델이 지원 안 하는 값은 지우세요.
+    response_modalities: ["TEXT", "IMAGE"]
+    # openai 전용 — gemini 는 이 값을 안 봅니다. low | medium | high
+    quality: "medium"
+    # 세로 스크롤 웹툰의 모양은 **캔버스가 정합니다.** 문구로는 안 됩니다.
+    #
+    # 3:4 는 만화책 페이지 비율입니다. 그 캔버스에 컷을 3~4개 넣으라고 하면
+    # 모델은 격자로 쌓을 수밖에 없고, "패널 테두리를 그리지 마라"고 세 번
+    # 말해도 흰 여백과 테두리가 나옵니다. 실제로 그렇게 나왔습니다
+    # (1792x2400 = 세로가 가로의 1.34배).
+    #
+    # 9:16 은 세로가 가로의 1.78배로, Gemini 가 받는 값 중 가장 깁니다.
+    # 진짜 웹툰(1:3~1:4)에는 못 미치므로 Scene 당 컷 수를 함께 줄여야
+    # 세로로 흐릅니다 (아래 scene.cuts_per_scene).
+    aspect_ratio: "9:16"    # 1:1, 3:4, 4:3, 9:16, 16:9 ...
+    image_size: "2K"        # 1K | 2K | 4K (gemini-2.5-flash-image 는 지원 안 함 → 삭제)
+    timeout_sec: 300
+
+    # 시드 — 실사용자 지적(2026-08) "같은 프롬프트, 같은 모델인데도 그림체가
+    # 다르게 나온다" 때문에 넣었습니다. 값을 적으면 run.py 가 이 값을 뿌리로
+    # 삼아 **컷마다 다른, 그러나 매번 같은** 시드를 만들어 넣습니다
+    # (run.job_seed). 같은 콘티를 다시 돌리면 같은 그림 근처로 돌아옵니다.
+    #
+    # ★ 기본은 **주석 처리**입니다. 값이 없으면 요청 본문에 seed 키가 아예 안
+    #   붙어서 예전 run 과 완전히 같게 동작합니다. 켜고 싶을 때만 여세요.
+    # ★ 한 화 전체에 같은 시드를 박는 것이 아닙니다. 그러면 컷들이 서로 닮아
+    #   버려서 "1컷·2컷 배경이 완전히 동일" 지적을 오히려 키웁니다.
+    # ★ 그림체가 마음에 안 들면 이 숫자만 바꿔서 다른 계열로 통째로 옮길 수
+    #   있습니다 — 컷별 상대 관계는 유지된 채로 전부 이동합니다.
+    # seed_base: 20260823
+
+# -----------------------------------------------------------------------------
+# 텍스트 LLM (prompt_gen / cut_split). 이미지 모델과 완전히 별개입니다.
+# -----------------------------------------------------------------------------
+text:
+  # 어느 LLM 이 한국어 콘티를 영어 패널 서술로 옮기는가. gemini | openai
+  #
+  # 그림(provider.name)과 **따로 고릅니다.** 이 단계는 창작이 아니라 번역에
+  # 가까워서, 그림을 잘 뽑는 모델이 이것도 잘한다는 보장이 없습니다. 실제로
+  # 콘티의 거리·효과음을 옮겨 적는 정확도가 갈립니다.
+  provider: openai
+  api_key_env: OPENAI_API_KEY
+  model_env: OPENAI_TEXT_MODEL
+  # Gemini 로 되돌리려면 위 세 줄을 이렇게 바꾸세요:
+  #   provider: gemini
+  #   api_key_env: GEMINI_API_KEY
+  #   model_env: GEMINI_TEXT_MODEL
+  temperature: 0.4          # 서술 → 프롬프트 변환은 창작이 아니라 번역에 가깝다
+  # 12컷짜리 한 화의 패널 서술을 한 번에 받으면 8000 으로는 잘린다. 잘린 JSON 은
+  # "Expecting ',' delimiter" 로 터지고, 재시도해도 같은 자리에서 또 잘려서
+  # 3번 다 실패한다 — 실제로 그렇게 멈췄다. 컷이 늘면 여기도 늘려야 한다.
+  max_output_tokens: 20000
+  timeout_sec: 180
+  cost_per_call_usd: 0.01   # 화당 1회 호출. 비용 안내 문구용 어림값
+
+pricing:
+  usd_to_krw: 1400          # 비용 안내 문구용 환율
+
+  # 100만 토큰당 USD 단가. 호출마다 실제 토큰으로 비용을 계산합니다.
+  #
+  # 아래 표에 없는 모델은 예전처럼 고정 단가(provider.cost_per_image_usd / text.
+  # cost_per_call_usd)로 어림합니다. 어느 쪽으로 계산했는지는 로그의 cost_basis
+  # 에 남고, usage.json 의 calls_priced_flat 이 아직 어림값인 호출 수입니다.
+  #
+  # **숫자는 출처를 확인하고 채우세요.** 요금표는 모델과 시점에 따라 다르고,
+  # 여기에 임의의 값이 들어 있으면 틀린 비용이 맞는 비용처럼 보입니다.
+  #
+  # 모델 이름은 **앞부분만** 맞으면 됩니다 (-preview, 날짜 꼬리표는 무시).
+  # 여러 개가 걸리면 가장 길게 맞는 항목을 씁니다.
+  #
+  #   input        입력 100만 토큰당 USD (텍스트). input_image 가 없으면
+  #                이미지 입력도 이 단가를 씁니다.
+  #   input_image  입력 이미지(레퍼런스 첨부) 100만 토큰당 USD — 텍스트와
+  #                단가가 다른 모델만. 없으면 input 을 그대로 씁니다.
+  #   output       출력 100만 토큰당 USD (텍스트·thinking).
+  #   output_image 출력 이미지 100만 토큰당 USD — 이미지 생성 모델은 대부분
+  #                텍스트 출력보다 훨씬 비싸서 따로 둡니다.
+  #   thought      thinking 토큰 단가. 없으면 output 단가를 씁니다.
+  #
+  # 아래 두 표는 2026-08-26 기준 각 사 공식 요금표(Standard tier, 실시간 호출
+  # 기준 — batch 아님)를 그대로 옮긴 것입니다. 값이 바뀌면 여기만 고치세요.
+  rates:
+    # Gemini 3 Pro Image (Nano Banana Pro) — ai.google.dev/gemini-api/docs/pricing
+    # 입력은 텍스트·이미지 단가가 같아서 input 하나로 충분합니다.
+    # output_image $120/1M = 1K·2K 이미지 한 장(1120 토큰) 당 $0.134 — 예전
+    # provider.cost_per_image_usd 값과 일치합니다(같은 요금표에서 나온 숫자).
+    gemini-3-pro-image:
+      input: 2.00
+      output: 12.00
+      output_image: 120.00
+    # OpenAI gpt-image-2 — developers.openai.com/api/docs/pricing
+    # 입력은 텍스트($5)와 이미지($8) 단가가 갈립니다.
+    gpt-image-2:
+      input: 5.00
+      input_image: 8.00
+      output_image: 30.00
+    # gpt-image-1 은 2026-10-23 종료 예정이라(providers/openai_images.py 참고)
+    # 그때까지 남아 있는 실행을 위해 같이 둡니다.
+    gpt-image-1:
+      input: 5.00
+      input_image: 10.00
+      output_image: 40.00
+
+# -----------------------------------------------------------------------------
+# 세로 스크롤 뷰어 (--view) — 이미지를 다시 만들지 않고 배치만 바꿔 확인하는 도구
+#   python run.py --run-id ... --episode 1 --condition C --view
+#   → outputs/<run_id>/ep1/viewer_C.html
+#
+# 컷별 표시 크기는 outputs/<run_id>/ep<n>/layout.json 에서 읽습니다(없으면 전부
+# normal). 형식: {"cut1": "wide", "cut2": "normal", "cut3": "impact", ...}
+# -----------------------------------------------------------------------------
+viewer:
+  width_px: 690             # 모바일 폭 기준
+  gap_px: 0                 # 컷 사이 간격. 0 = 웹툰처럼 딱 붙임 (뷰어에서 슬라이더로도 조절)
+
+  # 연출 여백 — W7.5 의 gap_after(0~3) 를 화면 픽셀로 바꾸는 표.
+  #   --directed 로 만든 뷰어(viewer_*_directed.html)에서만 쓰입니다.
+  #   숫자는 픽셀, "80vh" 처럼 vh 를 쓰면 화면 높이 비율입니다.
+  # 0 은 반드시 0 이어야 합니다 — "붙인다"는 정말로 붙는다는 뜻입니다.
+  gap_map:
+    0: 0                    # 붙임. 두 컷이 한 동작이다
+    1: 60                   # 보통
+    2: 240                  # 길게. 독자가 다음을 예상할 시간
+    3: "80vh"               # 낙차용. 화면이 거의 통째로 빈다
+  show_captions: true       # 대사 캡션 초기 표시 여부 (뷰어에서 끌 수 있음)
+  background: "#ffffff"     # 뷰어 배경. 어두운 색을 넣으면 글자색이 자동으로 뒤집힙니다
+
+  # 컷 크기 이름 → 틀 비율 (가로:세로). "screen" 은 화면 높이 가득.
+  # 이미지는 이 틀에 object-fit: cover 로 들어갑니다 — 안 맞는 부분은 잘립니다.
+  # normal 은 크기를 지정하지 않은 컷의 기본값이라 지우면 안 됩니다.
+  sizes:
+    wide: "16:9"            # 상황 설명, 배경 위주. 납작한 컷
+    normal: "4:3"           # 기본
+    tall: "3:4"             # 인물 전신, 이동
+    impact: "screen"        # 감정 절정, 반전. 화면을 꽉 채움
+
+limits:
+  # 조건당 상한. 컷 12개 x 후보 3장 = 36. 넘으면 실행 전에 중단합니다.
+  max_calls_per_condition: 36
+  max_total_calls: 120      # 이번 실행 전체 상한 (--all-conditions 대비)
+
+retry:
+  max_retries: 2            # 실패 건당 재시도 횟수 (총 시도 = 1 + max_retries)
+  backoff_sec: 5            # 재시도 전 대기 (시도마다 x2)
+
+# -----------------------------------------------------------------------------
+# art_qa — 그림 QA. **명백히 망한 그림**만 잡는 검수 + 제한된 자동 재생성.
+#
+#   그린 장마다 이미지 모델에게 되물어 (1) 작화 사고(손가락 6개, 구조 오류 등)
+#   와 (2) 그리려던 서술과 명백히 다른 것(인원수·핵심 대상·배경/시간대)을
+#   찾습니다. 걸리면 regen_max 안에서 다시 그리는데, 찾은 문제를 프롬프트에
+#   실어 보냅니다(안 실으면 같은 분포에서 랜덤 뽑기의 반복입니다). 한도가
+#   차도 남은 이슈는 art_qa.json 에 기록만 하고 그림은 그대로 씁니다 —
+#   거기서부터는 사람이 보고 정하는 영역입니다(랜딩의 다시 그리기).
+#
+#   구도·표정·화풍 같은 미적 판단은 **잡지 않습니다.** 검수는 예술 감독이
+#   아니라 QA 입니다 — "좋은 그림"은 못 판정해도 "틀린 그림"은 판정할 수
+#   있고, 그 선을 넘으면 사용자가 원하는 방향과 무관하게 돈만 씁니다.
+#
+#   ★ 기본 꺼짐 — 예전 run 을 다시 돌려도 결과가 안 바뀝니다. 켜면 장마다
+#     검수 호출 1회 + (걸린 장만) 재생성 비용이 붙습니다. 제품(landing)이
+#     켭니다. CLI 로는 --art-regen N.
+# -----------------------------------------------------------------------------
+art_qa:
+  enabled: false
+  regen_max: 2              # 검수에 걸렸을 때 다시 그리는 최대 횟수 (0 = 기록만)
+
+# -----------------------------------------------------------------------------
+# prompt_gen — LLM 이 장면 내용만 쓰도록 강제하기 위한 검사
+#   banned_terms 가 LLM 출력에 나오면 log.jsonl 과 화면에 경고를 남깁니다.
+#   (중단하지는 않습니다. 조립은 코드가 하므로 중복 단어가 들어갈 뿐입니다.)
+# -----------------------------------------------------------------------------
+prompt_gen:
+  banned_terms:
+    - webtoon
+    - manhwa
+    - manga
+    - anime
+    - art style
+    - illustration style
+    - flat color
+    - line art
+    - lineart
+    - cel shading
+    - watercolor
+    - photorealistic
+    - 3d render
+    - hair color
+    - blonde
+    - brunette
+    - years old
+    - year-old
+
+# -----------------------------------------------------------------------------
+# 레퍼런스 조건 — 이 실험의 핵심 변수
+#   sheets             : story-harness 가 만든 캐릭터 시트 중 첨부할 종류
+#                        (sheet | turnaround | expressions | details, 적은 순서대로 첨부)
+#                        **sheet 는 통합 시트 한 장**입니다 — 그 한 장 안에
+#                        4면도·표정 6종·디테일·컬러 팔레트가 네 구역으로 들어
+#                        있습니다. story.py --charsheet 의 기본이 이것이고,
+#                        --split 을 붙이면 세 장으로 쪼개집니다.
+#   refs               : sheets 를 못 찾았을 때 쓸 수동 경로 (하네스 기준 상대경로)
+#   use_previous_cut   : 직전 컷의 채택 이미지를 추가 첨부 (COND_D, 순차 생성)
+#   extra              : 첨부 이미지를 어떻게 쓰라는 지시문 ({extra})
+# 조건 이름이 곧 출력 폴더 이름입니다: outputs/<run_id>/ep{n}/A/...
+#
+# sheets 를 적었는데 시트도 refs 도 없으면 그 조건은 실행되지 않고 중단됩니다.
+# 조용히 첨부를 빼고 돌리면 "시트를 붙였는데도 안 되더라"는 잘못된 결론이 남습니다.
+# -----------------------------------------------------------------------------
+conditions:
+  A:
+    label: "텍스트만 (레퍼런스 없음)"
+    refs: []
+    use_previous_cut: false
+    extra: ""
+
+  # 통합 시트 한 장. story.py --charsheet 의 기본 산출물이라 가장 흔한 경로입니다.
+  # 세 장짜리(C+)와 담는 정보는 같은데 첨부가 1장이라 호출당 비용이 낮고,
+  # 한 장 안에서 함께 그려진 것이라 시트끼리의 그림체 흔들림이 없습니다.
+  # ⚠️ 한 화를 통째로 뽑을 때는 S 가 아니라 **S+** 를 쓰세요. S 는 직전 컷을
+  #    첨부하지 않습니다 — 12컷이 서로를 전혀 모른 채 각자 시트만 보고 그려져서,
+  #    같은 화 안에서 채색이 컷마다 갈립니다(어떤 컷은 순수 선화, 어떤 컷은
+  #    피부까지 칠해짐). 실제로 그렇게 나왔습니다.
+  #    S 는 컷 하나만 시험하거나, 조건 비교에서 "직전 컷의 효과"를 재는 대조군일
+  #    때 쓰는 것입니다.
+  S:
+    label: "통합 시트 1장 (4면도+표정+디테일) — 컷 하나 시험용·대조군"
+    sheets: ["sheet"]
+    refs: []
+    use_previous_cut: false
+    # 한 장 안에 네 구역이 있다는 것을 말해 주지 않으면 모델이 위쪽 4면도만 보고
+    # 표정·디테일 구역을 배경 장식으로 흘려 버립니다. 구역을 짚어 줍니다.
+    # 성별은 문구에 박지 않습니다 — 외형 블록이 따로 말합니다.
+    extra: >-
+      The attached image is the official character sheet of the main character.
+      It is a single sheet containing four regions: a turnaround with four views
+      along the top, a row of facial expressions in the middle, close-up design
+      details below that, and a color palette at the bottom. Keep the main
+      character's face, hairstyle, body proportions, outfit details and colors
+      identical to this sheet. Use the expression region as the reference for how
+      the face deforms with emotion, and the detail region for small features
+      such as trims, stripes, patches and fastenings. Match the palette exactly.
+      Apply this sheet ONLY to the main character; any other people in the panel
+      must look clearly different from the sheet.
+
+  # S 에 "직전 장"을 하나 더 붙인 것. 조연이 장마다 다른 사람이 되는 것을
+  # 문구가 아니라 **그림으로** 막습니다 — 조연에게는 캐릭터 시트가 없어서,
+  # 이전에 그려진 모습을 보여 주는 것 말고는 이어 붙일 방법이 없습니다.
+  #
+  # 후보를 1장으로 두면 체인이 깔끔합니다 (직전 장 = 그 장의 유일한 결과).
+  # 후보가 여러 장이면 picks.csv 의 채택본을 쓰고, 없으면 c1 을 씁니다.
+  #
+  # 주의: 직전 장을 붙이면 모델이 **레이아웃까지** 따라 그리려 합니다. 그래서
+  # extra 가 "인물 생김새만 보고 배치는 보지 마라"를 못박습니다.
+  # ★ 한 화를 통째로 뽑는 기본 조건입니다. 컷 모드·Scene 모드 양쪽에서 씁니다.
+  #   컷 모드에서는 "직전 장" 이 "직전 컷" 이고, 아래 extra 의 Scene 모드 문장을
+  #   코드가 컷 모드용 문구로 덮어씁니다 (run.PREV_CUT_CLAUSE).
+  #   직전 컷을 붙이는 목적이 둘입니다: 조연이 같은 사람으로 이어지는 것과,
+  #   **채색이 컷마다 갈리지 않는 것**.
+  "S+":
+    label: "통합 시트 + 직전 컷/장 (조연·채색 이어짐) — 한 화 뽑을 때 이것"
+    sheets: ["sheet"]
+    refs: []
+    use_previous_cut: true
+    extra: >-
+      The FIRST attached image is the official character sheet of the main
+      character — the single most important reference in this prompt. It is a
+      single sheet containing four regions: a turnaround with four views along
+      the top, a row of facial expressions in the middle, close-up design
+      details below that, and a color palette at the bottom.
+      The main character's face, hairstyle, body proportions, outfit details and
+      colors MUST be identical to this sheet in every panel, with no exceptions
+      and no drift, and the palette MUST match it exactly. If anything below —
+      the scene description, the style notes, any other instruction — seems to
+      imply a different hair color, hairstyle, outfit or face, this sheet
+      overrides it: the sheet is the character's actual appearance, and the
+      scene text below is only what the character is doing, never what the
+      character looks like.
+      The SECOND attached image is the SHEET DIRECTLY ABOVE this one in the same
+      episode — this sheet is joined to its bottom edge with no gap, and the
+      reader scrolls straight from it into this one. Use it for two things:
+      (1) any supporting character who appeared there and appears again here must
+      be the same person — same face, hair, build, gender and clothing;
+      (2) continuity across the join — unless this sheet's description says the
+      story moved elsewhere, it is the same place in the same tone: the same
+      surfaces and objects, the same light from the same direction, the same
+      colour grade, the same mood. Everything filling that place carries over
+      with it, background figures included.
+      Do NOT copy its panel layout, its composition or its camera angles; this
+      sheet has its own layout described above. Do not copy the main character
+      from it either — the character sheet decides the main character.
+      Apply the sheet ONLY to the main character; everyone else must look clearly
+      different from it.
+
+  C:
+    label: "턴어라운드 1장"
+    sheets: ["turnaround"]
+    # refs 는 **쓰이지 않습니다**. sheets 를 선언한 조건은 그 run 의 시트가
+    # 없으면 실행이 멈춥니다 (예전에는 여기로 떨어졌고, 그래서 지난 run 의
+    # 시트가 다음 run 에 붙어 한 화가 통째로 다른 사람이 됐습니다).
+    # 시트 없이 그림체만 보려면 조건 A 를 쓰세요.
+    refs: []
+    use_previous_cut: false
+    # 성별을 문구에 박지 않습니다 ("her" 로 두면 남성 주인공이 전 컷 여성으로
+    # 그려집니다). 성별은 외형 블록이 따로 말합니다.
+    # 시트가 적용되는 범위도 못박습니다 — 한 컷에 여러 인물이 나올 때 조연까지
+    # 주인공 얼굴이 되는 것을 막습니다.
+    extra: >-
+      The attached image is a character turnaround sheet of the main character.
+      Keep the main character's face, hairstyle, body proportions and outfit
+      details identical to the sheet. Apply the sheet ONLY to the main character;
+      any other people in the panel must look clearly different from the sheet.
+
+  # C 와 나란히 놓고 "첨부를 3장으로 늘리면 일관성이 실제로 개선되는가" 를 봅니다.
+  # 첨부가 늘면 호출당 비용이 오릅니다. 개선이 없으면 C 로 남기는 것이 맞습니다.
+  # 시트가 없으면 이 조건은 성립하지 않으므로 refs 예비 경로를 두지 않습니다.
+  "C+":
+    label: "캐릭터 시트 3장 (턴어라운드 + 표정 + 디테일)"
+    sheets: ["turnaround", "expressions", "details"]
+    refs: []
+    use_previous_cut: false
+    extra: >-
+      The attached images are the official character sheets of the main
+      character: the first is a turnaround (four views), the second is an
+      expression sheet, the third shows design details and the color palette.
+      Keep the main character's face, hairstyle, body proportions, outfit details
+      and colors identical to these sheets. Use the expression sheet as the
+      reference for how the face deforms with emotion, and the detail sheet for
+      small features such as trims, stripes, patches and fastenings. Apply these
+      sheets ONLY to the main character; any other people in the panel must look
+      clearly different from the sheets.
+
+  D:
+    label: "턴어라운드 + 직전 컷"
+    sheets: ["turnaround"]
+    refs: []                          # C 와 같습니다 — 시트가 없으면 멈춥니다
+    use_previous_cut: true
+    extra: >-
+      The first attached image is a character turnaround sheet of the main
+      character. The second attached image is the previous panel of the same
+      comic. Keep the main character's face, hairstyle, body proportions and
+      outfit details consistent with both references, and keep the drawing style
+      continuous with the previous panel. Apply the turnaround ONLY to the main
+      character; any other people in the panel must look clearly different.

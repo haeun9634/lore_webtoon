@@ -1,0 +1,1013 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LORE — 이야기의 바다, 루가 안내합니다</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐋</text></svg>">
+</head>
+<body data-view="landing">
+
+<header class="topbar">
+  <a class="brand" href="/" id="brandHome">
+    <!-- 로고는 루 본인이다. 도형으로 그린 실루엣 대신 실제 그림을 쓴다 —
+         마스코트가 있는데 로고만 다른 고래일 이유가 없다.
+         홈에 들어설 때마다 표정 12장(whale1·whale2 × 6) 중 하나로 바뀐다.
+         여기 적힌 것은 자바스크립트가 고르기 전에 잠깐 보일 그림이다.
+         도형 로고는 버리지 않고 design-reference/logo/lou-logo-mark.svg 에
+         남겨 뒀다 — 파비콘처럼 아주 작거나 한 색으로만 찍는 자리용. -->
+    <span class="brand-mark" aria-hidden="true">
+      <img id="brandLou" src="/static/lou/logo-2-default.png" alt="" width="30" height="30">
+    </span>
+    <span class="brand-name">LORE</span>
+    <span class="brand-sub">웹툰 스튜디오</span>
+  </a>
+  <nav class="topnav">
+    <a href="#how">어떻게 만드나</a>
+    <a href="#gallery">결과 예시</a>
+    <a href="/works">둘러보기</a>
+    <a href="/editor">편집실</a>
+    <!-- 계정이 없어서 잔액은 이 브라우저(uid) 기준이다 — app.js 의 getUid(). -->
+    <button type="button" class="credit-pill" id="chargeBtn" title="크레딧 충전하기">
+      <span class="credit-pill-icon">◈</span>
+      <span id="creditPillNum">…</span>
+      <span class="credit-pill-plus">+</span>
+    </button>
+    <!-- 계정은 선택 기능이다 — 안 눌러도 게스트로 그대로 만든다. 로그인
+         전에도 작은 루 얼굴을 넣어 둔다 — 글자만 있으면 옆 크레딧 배지와
+         무게가 안 맞아 어색했다. 로그인하면 그 자리가 실제 프로필 사진으로
+         바뀐다(accounts.py 의 DEFAULT_PHOTO_ID 와 같은 그림). -->
+    <button type="button" class="account-pill" id="accountBtn" title="로그인 · 내 계정">
+      <img class="account-pill-avatar" id="accountAvatarImg" alt=""
+           src="/static/lou/react/idle/01.webp">
+      <span id="accountPillLabel">로그인</span>
+    </button>
+  </nav>
+</header>
+
+<!-- ================================================= 계정(선택 기능) ===
+     닉네임+비밀번호만 — 이메일 인증·비밀번호 찾기 없음. 로그인 안 해도
+     웹툰은 그대로 만들 수 있고, "이 작품 나중에도 찾기" 를 원할 때만 쓴다. -->
+<div class="modal-veil" id="accountModal" hidden>
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="accountModalTitle">
+    <button type="button" class="modal-close" id="accountModalClose" aria-label="닫기">×</button>
+
+    <div id="accountAuth">
+      <div class="account-tabs">
+        <button type="button" class="account-tab is-active" id="tabLogin" data-tab="login">로그인</button>
+        <button type="button" class="account-tab" id="tabSignup" data-tab="signup">회원가입</button>
+      </div>
+
+      <form class="account-form" id="loginForm">
+        <h3 id="accountModalTitle">로그인</h3>
+        <label class="field"><span>닉네임</span>
+          <input type="text" name="nickname" maxlength="20" autocomplete="username" required>
+        </label>
+        <label class="field"><span>비밀번호</span>
+          <input type="password" name="password" autocomplete="current-password" required>
+        </label>
+        <p class="account-error" id="loginError" hidden></p>
+        <button type="submit" class="btn btn-primary btn-big">로그인</button>
+      </form>
+
+      <form class="account-form" id="signupForm" hidden>
+        <h3>회원가입</h3>
+        <label class="field"><span>닉네임</span>
+          <input type="text" name="nickname" maxlength="20" autocomplete="username"
+                 placeholder="한글·영문·숫자 2~20자" required>
+        </label>
+        <label class="field"><span>비밀번호</span>
+          <input type="password" name="password" autocomplete="new-password"
+                 placeholder="4자 이상" required>
+        </label>
+        <div class="account-photo-picker">
+          <span class="field-label">프로필 사진</span>
+          <div class="photo-grid" id="photoGrid"></div>
+          <label class="photo-upload-btn">
+            내 사진 올리기
+            <input type="file" id="photoUpload" accept="image/*" hidden>
+          </label>
+        </div>
+
+        <details class="terms-box">
+          <summary>이용약관 요약 보기</summary>
+          <ul>
+            <li>업로드한 사진·설정은 본인이 저작권을 가지고 있거나 사용 권한이 있는 것이어야 합니다.</li>
+            <li>다른 사람의 캐릭터·작품을 무단으로 써서 문제가 생기면 책임은 올린 사람에게 있습니다.</li>
+            <li>LORE는 만들어진 결과물의 저작권 분쟁에 대해 책임지지 않습니다.</li>
+          </ul>
+        </details>
+        <label class="agree-line">
+          <input type="checkbox" name="agree_terms" required>
+          <span>위 내용에 동의합니다</span>
+        </label>
+
+        <p class="account-error" id="signupError" hidden></p>
+        <button type="submit" class="btn btn-primary btn-big">회원가입</button>
+      </form>
+    </div>
+
+    <div id="accountProfile" hidden>
+      <div class="account-profile-head">
+        <img id="profileAvatarImg" class="account-profile-avatar" alt="">
+        <b id="profileNickname"></b>
+      </div>
+      <p class="account-works-label">내가 담아둔 작품</p>
+      <div class="account-works" id="accountWorksList"></div>
+      <button type="button" class="btn btn-quiet btn-sm" id="logoutBtn">로그아웃</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================= 크레딧 충전(프리토타이핑) ===
+     실제 PG 연동이 없다 — 카드사를 고르면 그 자리에서 크레딧을 지급한다.
+     카드번호를 넣는 화면은 아예 없다(카드 고르기 딱 한 걸음 앞에서 멈춘다). -->
+<div class="modal-veil" id="chargeModal" hidden>
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="chargeModalTitle">
+    <button type="button" class="modal-close" id="chargeModalClose" aria-label="닫기">×</button>
+
+    <div class="charge-step" data-charge-step="package">
+      <h3 id="chargeModalTitle">얼마나 멀리 항해할까요?</h3>
+      <p class="charge-lede">멀리 갈수록 한 편이 저렴해져요.</p>
+      <p class="charge-balance">지금 잔액 <b id="chargeCurBalance">0</b> 크레딧</p>
+      <div class="charge-packages" id="chargePackages"></div>
+    </div>
+
+    <div class="charge-step" data-charge-step="card" hidden>
+      <button type="button" class="charge-back" id="chargeBack">‹ 상품 다시 고르기</button>
+      <h3>결제 수단을 골라 주세요</h3>
+      <p class="charge-pkg-summary" id="chargePkgSummary"></p>
+      <div class="charge-cards" id="chargeCards"></div>
+    </div>
+
+    <!-- 실제 PG 흐름처럼 카드사 다음에 결제 방식(앱/웹)을 고른다.
+         프리토타이핑: 구매 의사를 마지막 확인까지 측정하는 것이 목적이라
+         걸음을 실제와 같게 두되, **카드번호를 넣는 화면은 여전히 없다.** -->
+    <div class="charge-step" data-charge-step="method" hidden>
+      <button type="button" class="charge-back" id="chargeBackToCard">‹ 결제 수단 다시 고르기</button>
+      <h3 id="chargeMethodTitle">결제 방식을 골라 주세요</h3>
+      <p class="charge-pkg-summary" id="chargeMethodSummary"></p>
+      <div class="charge-cards">
+        <button type="button" class="charge-card" data-method="app">
+          📱 앱 결제<small>카드사 앱으로 이동해 인증</small></button>
+        <button type="button" class="charge-card" data-method="web">
+          💳 웹 결제<small>카드번호 직접 입력</small></button>
+        <button type="button" class="charge-card" data-method="simple">
+          ⚡ 간편 결제<small>등록된 결제 수단으로 바로</small></button>
+      </div>
+    </div>
+
+    <div class="charge-step" data-charge-step="confirm" hidden>
+      <h3>정말 결제하시겠습니까?</h3>
+      <div class="charge-confirm-box" id="chargeConfirmBox"></div>
+      <p class="charge-confirm-note">결제 즉시 크레딧이 충전됩니다.</p>
+      <div class="charge-confirm-actions">
+        <button type="button" class="btn btn-quiet" id="chargeConfirmNo">취소</button>
+        <button type="button" class="btn btn-primary" id="chargeConfirmYes">결제하기</button>
+      </div>
+    </div>
+
+    <div class="charge-step" data-charge-step="done" hidden>
+      <div class="charge-done-emoji" id="chargeDoneEmoji">🎉</div>
+      <h3 id="chargeDoneTitle">결제가 완료됐어요</h3>
+      <p id="chargeDoneBody"></p>
+      <button type="button" class="btn btn-primary btn-big" id="chargeDoneClose">확인</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================= 모드 고르기 ========= -->
+<!--
+  처음 온 사람이 가장 먼저 보는 화면. 고른 값은 브라우저에 남아서(lore_mode)
+  다음부터는 안 뜬다 — 계정이 없으므로 저장할 곳이 브라우저뿐이다.
+
+  두 모드가 **다른 기능**이 아니라는 것을 여기서 분명히 해야 한다. 만드는 길은
+  하나고, 다른 것은 "무엇을 물어보는가"와 "어디서 멈춰서 보여주는가" 뿐이다.
+-->
+
+<!-- ===================================================== 랜딩 ============ -->
+<main id="landing">
+
+  <!-- 홈 = 소개 + 만들기. 둘을 떼어 놓지 않는다.
+       PC 는 왼쪽에 소개, 오른쪽에 만들기를 나란히 둔다. 폰은 소개가 짧게
+       지나가고 바로 만들기가 온다. 들어온 사람이 첫 화면에서 할 수 있는 일이
+       하나뿐이라면 그 일이 화면에 같이 있어야 한다. 예전에는 여기에 웹툰
+       목록을 깔았는데, 아무도 보여 달라고 한 적 없는 것이라 지웠다. -->
+
+  <section class="top" id="top">
+    <div class="hero-sea" aria-hidden="true"></div>
+
+    <!-- 캔버스 A안(capture/design1) 그대로 — 한 컬럼. PC 라고 좌우로 벌리지
+         않는다. 물이 화면 전체에 흐르고, 내용은 가운데 한 줄기로 내려간다. -->
+    <div class="top-intro">
+      <p class="hero-kicker">Story is the sea</p>
+      <h1>이야기의 바다,<br>루가 안내합니다.</h1>
+      <p class="top-lede">캐릭터를 띄우면, 루가 이야기 조각을 모아
+         한 편의 웹툰을 만들어줘요.</p>
+      <!-- 들어올 때마다 루의 그림이 바뀐다(app.js 가 고른다). 여기 적힌 것은
+           자바스크립트가 안 돌 때 나올 기본 그림이다. -->
+      <img class="hero-lou" id="heroLou" src="/static/lou/hero-whale2.png" alt="LORE의 마스코트 고래 루">
+      <div class="hero-cta">
+        <!-- "시작하기" 로는 무엇이 시작되는지 알 수가 없었다. 가져올 것(내
+             캐릭터)과 나올 것(웹툰)을 단추 하나에 다 적는다. -->
+        <!-- 값은 app.js 가 채운다(paintCost) — 크레딧 값은 /api/config 에서
+             오므로 여기 숫자를 적어 두면 서버와 어긋난다. -->
+        <button type="button" class="btn btn-primary" id="startBtn">내 캐릭터로 웹툰 만들기
+          <span class="cost-chip" id="startCostChip" hidden></span>
+        </button>
+        <a class="btn btn-shell" href="/works">둘러보기</a>
+      </div>
+    </div>
+
+    <!-- 깊이 — 수면에서 심해로. 물이 짙어지는 위에 얹힌 세 줄 -->
+    <ol class="depths">
+      <li>
+        <img src="/static/lou/art/world-begins.png" alt="">
+        <div><b>수면 — 이야기의 시작</b><small>캐릭터를 만나는 곳</small></div>
+      </li>
+      <li>
+        <img src="/static/lou/art/world-voyage.png" alt="">
+        <div><b>항해 — 이야기의 전개</b><small>세계와 사건을 탐험</small></div>
+      </li>
+      <li>
+        <img src="/static/lou/art/world-depth.png" alt="">
+        <div><b>심해 — 이야기의 깊이</b><small>숨겨진 과거와 진실</small></div>
+      </li>
+    </ol>
+
+  </section>
+</main>
+
+
+<!-- ============================================ 만들기 (별도 화면) ====
+     캔버스에서 홈과 만들기는 **다른 아트보드**다. 홈의 "내 캐릭터로
+     시작하기"는 아래로 스크롤하는 것이 아니라 이 화면으로 **넘어온다**
+     (view 전환 — progress·works 와 같은 방식). 1걸음에서 뒤로 가면 홈이다. -->
+<section id="create" class="create" hidden>
+  <div class="studio" id="studio">
+    <form id="form" class="wizard" autocomplete="off">
+
+      <div class="wiz-head">
+        <button type="button" class="wiz-back" id="wizBack" aria-label="이전 걸음">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
+               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <ol class="wiz-gauge" id="wizGauge" aria-label="진행"></ol>
+        <button type="button" class="wiz-skip" id="wizSkip">건너뛰기</button>
+      </div>
+
+      <!-- 걸음마다 제목 오른쪽이 비어 있었다. 루가 그 자리에서 같이 내려간다 —
+           걸음을 옮길 때마다 다른 표정으로 바뀐다(app.js pickWizLou). -->
+      <img class="wiz-lou" id="wizLou" src="/static/lou/logo-2-curious.png" alt="" aria-hidden="true">
+
+      <!-- 1 · 수면 — 사진 · 이름 · 자유 입력. 이게 전부다.
+           자유 입력 하나가 캐릭터 설명과 이야기를 **겸한다**. "이야기 한 줄"
+           이라고 적어 뒀더니 한 문장만 써야 하는 줄 알고 캐릭터 성격 같은
+           것은 아예 안 적었다. 그래서 칸을 하나로 두고, 적힌 것을 그대로
+           character 와 story 양쪽에 보낸다(app.js collect 참고) — 시트를
+           만들 때도 이야기를 짤 때도 같은 글을 본다. -->
+      <!-- 1 · 수면 — 누구를 데리고 갈까요 (사진 · 이름 · 캐릭터 설명) -->
+      <section class="wiz-step" data-step="1">
+        <!-- 걸음마다 "말"(눈금·제목·안내)과 "손이 닿는 것"(입력 카드)을 한
+             겹으로 묶어 둔다. 폰에서는 위아래로 그냥 흐르고, PC 에서는 이
+             덩어리가 왼쪽 칸으로 간다(style.css 의 PC 절). -->
+        <div class="wiz-say">
+          <p class="wiz-eyebrow">수면 · STEP 1 / 5</p>
+          <h3 class="wiz-title">누구를 데리고<br>바다로 갈까요?</h3>
+          <p class="wiz-sub">아는 만큼만 적으세요. 빈 칸은 루가 채웁니다.</p>
+        </div>
+
+        <div class="wiz-card">
+          <div class="photo-row">
+            <label class="photo-drop" id="photoDrop">
+              <!-- multiple 이 있어야 고르는 창에서 여러 장을 한 번에 집을 수 있다.
+                   한 장씩 눌러 더하는 길(+ 칸)과 둘 다 열어 둔다. -->
+              <input type="file" id="photo" accept="image/png,image/jpeg,image/webp" multiple hidden>
+              <span class="photo-hint">캐릭터 사진 <em class="req">필수</em></span>
+              <div class="photo-strip" id="photoStrip"></div>
+              <span class="photo-count" id="photoCount"></span>
+            </label>
+            <!-- 올리기 전에 읽어야 하는 것. 마지막 걸음의 동의는 "확인했다"는
+                 도장이고, 여기는 **무엇을 확인해야 하는지** 알려 주는 자리다.
+                 사진을 고르기 전에 봐야 뜻이 있으므로 타일 바로 아래 둔다. -->
+            <!-- 책임 소재는 여기 안 적는다 — 약관(회원가입 · 마지막 걸음의 요약)에
+                 이미 있고, 사진을 고르는 자리에서는 "무엇을 올려야 하는가" 만 말한다. -->
+            <ul class="photo-rules">
+              <li>본인이 찍었거나 직접 그린 사진, 또는 쓸 권한이 있는 사진만 올려주세요.</li>
+              <li>실존 인물은 본인이거나 동의를 받은 경우에만 올려주세요.</li>
+              <li>올린 사진은 캐릭터를 만드는 데만 쓰고, 시트가 나오면 서버에서 지웁니다.</li>
+              <li>완성한 웹툰은 <b>둘러보기</b>에 공개됩니다. 마이페이지에서 언제든 비공개로 바꿀 수 있어요.</li>
+            </ul>
+          </div>
+
+          <label class="field">
+            <span>이름 <em class="req">필수</em></span>
+            <input type="text" name="name" placeholder="예: 민시하" maxlength="40" required>
+          </label>
+
+          <label class="field">
+            <span>캐릭터 설명 <small>선택</small></span>
+            <textarea name="character" rows="4"
+              placeholder="성격·말투·관계 등 아는 만큼.&#10;예) 장난기 많은데 겁은 많아서 친구 앞에서만 센 척한다"></textarea>
+          </label>
+
+          <input type="hidden" name="photo_note" value="">
+        </div>
+      </section>
+
+      <!-- 2 · 항해 — 어떤 이야기를 만들까요 -->
+      <section class="wiz-step" data-step="2" hidden>
+        <div class="wiz-say">
+          <p class="wiz-eyebrow">항해 · STEP 2 / 5</p>
+          <h3 class="wiz-title">어떤 이야기를<br>만들까요?</h3>
+          <p class="wiz-sub">비우면 루가 캐릭터를 보고 짭니다.</p>
+        </div>
+
+        <div class="wiz-card">
+          <label class="field big">
+            <span class="sr-only">이야기</span>
+            <textarea name="story" rows="5" id="storyInput"
+              placeholder="한 줄이어도 되고 줄거리여도 됩니다.&#10;예) 평범한 회사원인데 로맨스 판타지 소설에 빙의했다"></textarea>
+          </label>
+        </div>
+      </section>
+
+      <!-- 3 · 깊은 바다 — 장르. 안 골라도 되고, 고른 것을 다시 누르면 풀린다. -->
+      <section class="wiz-step" data-step="3" hidden>
+        <div class="wiz-say">
+          <p class="wiz-eyebrow">깊은 바다 · STEP 3 / 5</p>
+          <h3 class="wiz-title">어떤 장르로<br>그릴까요?</h3>
+          <p class="wiz-sub">안 고르면 루가 이야기에 맞춰 정합니다.</p>
+        </div>
+
+        <div class="wiz-card">
+          <div class="genre-quick" id="genreQuick"></div>
+          <label class="field">
+            <span>직접 쓰기 <small>선택</small></span>
+            <input type="text" name="genre" list="genreList" placeholder="예: 무협 / 로맨스 판타지">
+            <datalist id="genreList">
+              <option value="판타지"><option value="액션"><option value="스릴러">
+              <option value="헌터·게이트"><option value="센티넬"><option value="게임 판타지">
+              <option value="BL(오메가버스)"><option value="로맨스"><option value="로맨스 판타지">
+              <option value="학원로맨스"><option value="무협"><option value="개그">
+              <option value="일상"><option value="아이돌"><option value="마법학교">
+              <option value="현대 판타지"><option value="오컬트 미스터리">
+              <option value="좀비 아포칼립스"><option value="히어로">
+            </datalist>
+          </label>
+          <!-- 고르든 안 고르든 늘 한 줄이 뜬다. 비어 있으면 고장으로 읽힌다.
+               (단추는 이 카드 맨 위에 있다 — 고르는 것이 먼저고, 직접 쓰기는
+               단추에 없는 장르를 위한 자리다.) -->
+          <p class="genre-note" id="genreNote" data-state="empty"></p>
+        </div>
+        <input type="hidden" name="world" value="">
+      </section>
+
+      <!-- 4 · 심해 — 그림체 -->
+      <section class="wiz-step" data-step="4" hidden>
+        <div class="wiz-say">
+          <p class="wiz-eyebrow">심해 · STEP 4 / 5</p>
+          <h3 class="wiz-title">어떤 그림체로<br>그릴까요?</h3>
+        </div>
+
+        <div class="wiz-card">
+          <div class="styles" id="styles"></div>
+        </div>
+      </section>
+
+      <!-- 5 · 바닥 — 갈림길. 고르면 그 자리에서 요약과 만들기 단추가 열린다. -->
+      <section class="wiz-step wiz-step-fork" data-step="5" hidden>
+        <div class="wiz-say">
+          <p class="wiz-eyebrow">바닥 · STEP 5 / 5</p>
+          <h3 class="wiz-title">어떻게 볼까요?</h3>
+        </div>
+
+        <div class="fork">
+          <!-- 빠르게가 기본이다 — 처음 만드는 사람에게 맞는 쪽이고, 아무것도
+               안 고른 채로 요약이 안 보이면 화면이 멈춘 것처럼 읽힌다. -->
+          <button type="button" class="fork-card" data-mode="simple" aria-pressed="true">
+            <h4>빠르게 결과부터</h4>
+            <p class="fork-lede">루가 알아서 그려 옵니다.<br>중간에 안 멈춥니다.</p>
+          </button>
+
+          <button type="button" class="fork-card" data-mode="expert" aria-pressed="false">
+            <h4>3번만 확인하며</h4>
+            <p class="fork-lede">이야기 · 콘티 · 그림<br>세 곳에서 보고 넘어갑니다.</p>
+          </button>
+        </div>
+
+        <div class="wiz-after" id="wizAfter">
+          <div class="wiz-card wiz-summary" id="wizSummary"></div>
+        </div>
+
+        <!-- 화면에서 뺀 설정들. 기본값 그대로 서버에 간다. -->
+        <!-- 연출. 기본은 "웹툰"이다 — 컷 사이 여백·배경 연결·장 경계를 코드가
+             콘티대로 그린다. "빠르게"(fast)는 3컷을 한 캔버스에 몰아넣어
+             배치를 모델에게 통째로 맡기는 모드라, 콘티가 계산해 둔 여백
+             (gap_after)도 통컷(size: impact)도 픽셀에 닿지 못한다. 지금은
+             남겨 두되 기본에서 뺐다 — 고르려면 이 값을 fast 로 준다. -->
+        <input type="hidden" name="layout_mode" value="webtoon">
+        <input type="hidden" name="head_ratio" value="">
+        <input type="hidden" name="art_qa_regen_max" value="2">
+      </section>
+
+      <!-- 만들 때마다 짧게 확인 — 회원가입 때 한 번 동의한 것과 별개로,
+           "지금 올린 이 사진·설정"에 대한 확인을 매번 받는다.
+           심해 위에 그냥 얹으면 글자도 네모도 물에 묻혀 안 보였다. 그래서
+           마지막 걸음의 다른 것들처럼 종이 위에 올린다. -->
+      <div class="ip-agree" id="ipAgreeLine" hidden>
+        <label class="agree-line">
+          <input type="checkbox" id="ipAgreeCheck" required>
+          <span>업로드한 사진·설정에 대한 저작권 문제가 없음을 확인합니다
+            <em class="req">필수</em></span>
+        </label>
+        <!-- 한 줄 확인만 있으면 무엇에 동의하는지 모른 채 누르게 된다.
+             접어 두고, 궁금한 사람만 펴 보게 한다. -->
+        <details class="terms-box">
+          <summary>이용약관 요약 보기</summary>
+          <ul>
+            <li>업로드한 사진·설정은 본인이 저작권을 가지고 있거나 사용 권한이 있는 것이어야 합니다.</li>
+            <li>다른 사람의 캐릭터·작품을 무단으로 써서 문제가 생기면 책임은 올린 사람에게 있습니다.</li>
+            <li>LORE는 만들어진 결과물의 저작권 분쟁에 대해 책임지지 않습니다.</li>
+          </ul>
+        </details>
+      </div>
+
+      <!-- 단추 줄과 그 아래 한 줄은 한 덩어리로 화면 바닥에 붙어 있는다.
+           따로 두면 둘 다 바닥에 붙으려다 서로를 가린다. -->
+      <div class="wiz-actions">
+        <div class="wiz-foot">
+          <button type="button" class="btn btn-quiet wiz-prev" id="wizPrev">이전</button>
+          <button type="button" class="btn btn-primary wiz-next" id="wizNext">다음</button>
+          <button type="submit" class="btn btn-primary wiz-go" id="submitBtn" hidden>
+            웹툰 만들기 <span class="cost-chip" id="costChip">−240 크레딧</span>
+          </button>
+        </div>
+        <p class="submit-note" id="submitNote">사진과 이름만 있으면 시작합니다.</p>
+      </div>
+    </form>
+    </div>
+</section>
+
+<!-- ===================================================== 진행 ============ -->
+<section id="progress" class="progress" hidden>
+  <div class="progress-inner">
+    <!-- 기다리는 화면. 여기서 사람이 보는 것은 세 가지다 —
+         루가 지금 무엇을 하는 그림(단계), 그것을 사람 말로 한 줄, 그리고
+         만질 수 있다는 것. 시계와 중단은 필요하지만 주인공이 아니라서
+         아래로 내렸다. 예전에는 시계가 오른쪽에 붙어 루와 자리를 다퉜다. -->
+    <!-- 위 — 루가 지금 무엇을 하고 있는지. 그림 · 문구 · 바가 같은 것을
+         말한다. 여기에는 잡담이 없다. -->
+    <header class="progress-head">
+      <!-- 지금 루가 무슨 일을 하고 있는지. 그림 · 한 줄 · 바가 같은 것을 말한다.
+           더 알고 싶은 사람만 토글을 열어 단계 안쪽까지 본다. -->
+      <div class="stage-now">
+        <div class="stage-art" id="stageArt" aria-hidden="true"></div>
+        <p class="stage-say" id="mascotLine">루가 이야기를 만들고 있어요</p>
+        <div class="lou-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="louProgress">
+          <div class="lou-bar"><i id="louBarFill"></i></div>
+          <span class="lou-pct" id="louPct">0%</span>
+        </div>
+        <p class="stage-clock">
+          <span class="clock-time" id="clock">0:00</span>
+          <span class="clock-label" id="clockLabel">경과</span>
+        </p>
+        <details class="stage-detail">
+          <summary>지금 하고 있는 일 자세히</summary>
+          <ol class="rail" id="rail"></ol>
+        </details>
+        <!-- 그림까지 다 나오려면 몇 분이 걸린다. 그동안 이 화면에 묶어 둘 이유가
+             없다 — 만드는 일은 서버에서 도니까, 나가서 남의 작품을 보다 와도
+             된다. 나가면 떠 있는 표시(#miniProg)가 따라붙는다. -->
+        <button type="button" class="btn btn-quiet btn-sm stage-away" id="progBrowse">
+          기다리는 동안 다른 웹툰 둘러보기 →
+        </button>
+      </div>
+      <p class="eyebrow" id="progEyebrow" hidden>만드는 중</p>
+      <h2 id="progTitle" hidden>웹툰을 만들고 있습니다</h2>
+      <p class="progress-sub" id="progSub" hidden></p>
+
+    </header>
+
+    <!-- 아래 — 기다리는 동안 노는 자리. 여기의 루는 진행과 무관하다.
+         눌러야 반응하고, 반응은 이 안에서만 일어난다. -->
+    <div class="play">
+      <!-- 루가 헤엄쳐 다닐 수 있는 자리. 끌면 이 안에서 따라오고 놓으면 돌아온다. -->
+      <div class="mascot-stage" id="mascotStage">
+        <button type="button" class="mascot" id="mascot"
+                data-mood="think" aria-label="루를 눌러 보기">
+          <img id="mascotImg" src="/static/lou/react/idle/01.webp" alt="" draggable="false">
+        </button>
+      </div>
+      <p class="play-say" id="playSay">루를 눌러 보세요</p>
+      <p class="play-hint" id="playHint">눌러 보기 · 연달아 누르기 · 꾹 누르기 · 끌어당기기</p>
+      <!-- iOS 는 사람이 허락해야 흔들기를 알려준다. 필요한 기기에서만 뜬다. -->
+      <button type="button" class="btn btn-quiet btn-sm" id="shakeAllow" hidden>흔들기 켜기</button>
+    </div>
+
+    <!-- 기다리는 동안 계속 바뀌는 팁·TMI. 내용은 /static/lou/tips.json 에 있다. -->
+    <div class="tips" id="tips" hidden aria-live="polite">
+      <span class="tip-kind" id="tipKind">팁</span>
+      <p class="tip-text" id="tipText"></p>
+    </div>
+
+
+    <!-- 이미지 모델이 거절한 장. 실패(재시도로 풀림)와 성격이 달라서 자리를
+         따로 준다 — 재시도해도 같은 답이 오고, 고칠 곳은 사용자의 입력이다. -->
+    <section class="refusals" id="refusals" hidden>
+      <div class="refusals-head">
+        <h3>모델이 그리기를 거절한 장이 있습니다</h3>
+        <p>안전 필터에 걸린 것이라 다시 시도해도 같은 결과가 나옵니다.
+           아래 사유를 보고 캐릭터 설정이나 장면 설명을 고쳐 주세요.</p>
+      </div>
+      <ul class="refusal-list" id="refusalList"></ul>
+    </section>
+
+    <div class="cutstrip" id="cutstrip" hidden>
+      <div class="cutstrip-head">
+        <span>그려진 장</span>
+        <span id="cutCount"></span>
+      </div>
+      <div class="cutstrip-grid" id="cutGrid"></div>
+    </div>
+
+    <details class="console">
+      <summary>자세히 보기 <small>파이프라인 로그</small></summary>
+      <pre id="logBox"></pre>
+    </details>
+
+    <!-- 중단은 **맨 아래**다. 시계 옆(화면 한가운데)에 있던 동안에는 기다리는
+         내내 손이 닿는 자리에 있어서, 지나가다 누르기 쉬웠다. 되돌릴 수 없고
+         크레딧도 안 돌아오는 일은 찾아가서 눌러야 하는 자리에 둔다. -->
+    <div class="cancel-row">
+      <button type="button" class="btn btn-danger btn-sm" id="cancelBtn">만들기 중단</button>
+    </div>
+  </div>
+</section>
+
+<!-- 중단 확인. 브라우저 confirm() 을 안 쓰는 이유: 글자를 꾸밀 수가 없어서
+     "크레딧은 안 돌아온다" 를 눈에 띄게 말할 방법이 없고, 창 모양도 화면과
+     따로 논다. 무엇보다 기본 단추가 확인 쪽이라 엔터 한 번에 지나간다. -->
+<div class="modal-veil" id="cancelModal" hidden>
+  <div class="modal-box modal-narrow" role="dialog" aria-modal="true"
+       aria-labelledby="cancelModalTitle">
+    <h3 id="cancelModalTitle">정말로 중단하시겠습니까?</h3>
+    <p class="cancel-warn"><b>크레딧은 환불되지 않습니다.</b></p>
+    <p class="cancel-sub">지금까지 그려 둔 장은 그대로 남습니다 — 편집실에서 볼 수 있습니다.</p>
+    <div class="cancel-actions">
+      <button type="button" class="btn btn-quiet" id="cancelKeep">계속 만들기</button>
+      <button type="button" class="btn btn-danger" id="cancelConfirm">중단하기</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================== 둘러보기 ==========
+     지금까지 만든 것을 **읽으려고** 여는 자리. 편집실은 고치는 자리라 도구가
+     늘 곁에 붙어 있어서 읽기에는 맞지 않는다. 여기서 고르면 완성본 화면이
+     그대로 열리고, 회차가 여럿이면 회차마다 단추가 붙는다. -->
+<!-- 둘러보기 — 다른 사람들이 만든 웹툰을 구경하는 자리.
+     내가 만든 것만 모아 보는 곳은 마이페이지다(#mypage). 둘이 같은 화면이던
+     때에는 "내 웹툰" 이라고 적혀 있었는데, 남의 작품을 구경할 자리가 따로
+     없어서 이 화면이 두 몫을 하고 있었다. -->
+<section id="works" class="works" hidden>
+  <header class="works-head">
+    <p class="eyebrow">둘러보기</p>
+    <h2>다른 사람들의 웹툰</h2>
+    <p class="section-lede">
+      루가 데려온 이야기들이에요. 표지를 누르면 그대로 읽을 수 있어요.
+    </p>
+    <div class="works-actions">
+      <a class="btn btn-quiet btn-sm" href="/">홈으로</a>
+      <a class="btn btn-primary btn-sm" href="/#studio">내 캐릭터로 웹툰 만들기</a>
+    </div>
+  </header>
+  <div class="works-grid" id="worksGrid"></div>
+</section>
+
+<!-- ================================================= 마이페이지 ========= -->
+<!-- 로그인한 사람의 자리. 상단 바의 「로그인」이 로그인 뒤 「마이페이지」로
+     바뀌고 여기로 온다. 둘러보기(/works)가 이 서버에 있는 작품 전부라면,
+     여기는 **내 계정에 저장한 것만** 이다. -->
+<section id="mypage" class="mypage" hidden>
+  <header class="mypage-head">
+    <img class="mypage-photo" id="myPhoto" alt="">
+    <div class="mypage-who">
+      <p class="eyebrow">마이페이지</p>
+      <h2 id="myNickname"></h2>
+      <p class="mypage-meta" id="myMeta"></p>
+    </div>
+    <div class="mypage-actions">
+      <a class="btn btn-primary btn-sm" href="/#studio">새 웹툰 만들기</a>
+      <button type="button" class="btn btn-quiet btn-sm" id="myLogout">로그아웃</button>
+    </div>
+  </header>
+
+  <!-- 크레딧. 상단 바 배지에도 숫자가 있지만 거기는 **알림**이고, 여기는
+       **자리**다 — 얼마 남았는지 보고 충전할지 정하는 곳. 한 편에 얼마인지를
+       같이 적어야 "1,240" 이 많은 건지 적은 건지 알 수 있다. -->
+  <div class="mypage-credit">
+    <div class="mypage-credit-main">
+      <p class="eyebrow">크레딧</p>
+      <p class="mypage-credit-num"><b id="myCreditNum">…</b> <span>C</span></p>
+      <p class="mypage-credit-hint" id="myCreditHint"></p>
+    </div>
+    <button type="button" class="btn btn-primary btn-sm" id="myChargeBtn">충전하기</button>
+  </div>
+
+  <div class="mypage-section">
+    <div class="mypage-section-head">
+      <h3>저장한 작품</h3>
+      <a class="btn btn-quiet btn-sm" href="/works">전부 보기</a>
+    </div>
+    <!-- 옆으로 미는 줄. 세로로 쌓으면 작품이 몇 편만 있어도 화면이 길어지고,
+         마이페이지에서 보고 싶은 것은 "무엇이 있나" 지 한 편 한 편이 아니다. -->
+    <div class="works-grid works-rail" id="myWorksGrid"></div>
+  </div>
+</section>
+
+<!-- ===================================================== 결과 ============ -->
+<section id="result" class="result" hidden>
+  <!-- 다 만든 뒤 처음 보는 화면이다. 예전에는 글자만 빽빽하고 단추가 여덟 개라
+       "완성"이 아니라 관리 화면처럼 보였다. 지금은 루가 완성본을 들고 있는
+       그림을 표지로 깔고, 단추는 여기서 실제로 할 일 셋만 남긴다. 나머지는
+       ⋯ 안으로 넣었다 — 없앤 것이 아니라 첫 화면에서 뺀 것이다. -->
+  <header class="result-head">
+    <div class="result-cover">
+      <img class="result-cover-art" src="/static/lou/stage/done.webp" alt="" aria-hidden="true">
+      <div class="result-cover-text">
+        <p class="eyebrow" id="resGenre"></p>
+        <!-- 제목은 모델이 지은 것이라 늘 맞지는 않는다. 게다가 공유 카드에
+             그대로 실려서 남에게 먼저 보이는 이름이다 — 여기서 고칠 수 있다.
+             고친 것은 작품 폴더에 남아(titles.json) 목록·편집실·공유에 전부
+             따라온다. 비우고 저장하면 모델이 지은 이름으로 되돌아간다. -->
+        <div class="title-row">
+          <h2 id="resTitle"></h2>
+          <button type="button" class="icon-btn" id="titleEditBtn"
+                  title="제목 고치기" aria-label="제목 고치기">✎</button>
+        </div>
+        <div class="title-edit" id="titleEdit" hidden>
+          <input type="text" id="titleInput" maxlength="60"
+                 placeholder="비우면 원래 제목으로 되돌아갑니다">
+          <button type="button" class="btn btn-primary btn-sm" id="titleSaveBtn">저장</button>
+          <button type="button" class="btn btn-quiet btn-sm" id="titleCancelBtn">취소</button>
+        </div>
+        <p class="result-sub" id="resSub"></p>
+      </div>
+    </div>
+    <p class="result-logline" id="resLogline"></p>
+    <!-- 회차 고르개. 한 편뿐이면 app.js 가 통째로 감춘다. -->
+    <div class="ep-tabs" id="resEpisodes" hidden></div>
+
+    <div class="result-actions">
+      <a class="btn btn-primary" id="downloadBtn" download>내려받기</a>
+      <a class="btn btn-quiet" id="editorLink" href="/editor">편집실로 가기</a>
+      <!-- 로그인했고 이미 담아 둔 작품이면 app.js 가 감춘다 — 이미 된 일을
+           또 하라고 권하는 단추만큼 쓸데없는 것이 없다. -->
+      <button type="button" class="btn btn-quiet" id="claimBtn">서버에 저장하기</button>
+      <!-- 홈 대신 공유. 다 만든 화면에서 다음에 하고 싶은 일은 "나가기" 가
+           아니라 "보여주기" 다 — 홈은 위 로고로 언제든 간다. -->
+      <!-- 어디로 보낼지 고르는 자리. 목록은 app.js 가 채운다 — 카카오톡은
+           키가 있을 때만, "다른 앱으로…" 는 공유 시트가 있는 기기에서만. -->
+      <div class="share-wrap">
+        <button type="button" class="btn btn-quiet" id="shareBtn"
+                aria-haspopup="true" aria-expanded="false">공유하기</button>
+        <div class="share-menu" id="shareMenu" hidden></div>
+      </div>
+    </div>
+    <!-- 단추 셋이 각각 무엇인지 한 줄씩. 「서버에 저장하기」는 눌러야 할 이유가
+         화면에 없으면 아무도 안 누른다 — 어디서 다시 보는지를 말해 준다. -->
+    <p class="result-note" id="claimNote">
+      <b>서버에 저장하기</b> — 로그인하고 저장하면 <b>마이페이지</b>에서 언제든 다시 볼 수 있습니다.
+      저장 안 해도 이 브라우저에는 남습니다.
+    </p>
+    <!-- 받아 보고 나서 "왜 글자가 붙었지?" 하지 않게 미리 말해 둔다. -->
+    <p class="wm-note">내려받는 파일에는 아래에 LORE 표시가 붙습니다.</p>
+  </header>
+
+  <!-- 계정이 없어도 작품은 브라우저에 남는다 — 이건 "그래도 계정에 담아
+       두면 다른 기기·브라우저를 지워도 찾을 수 있다" 는 선택 권유일 뿐이다. -->
+  <details class="mem-box">
+    <summary>작품 규칙 <small>모든 단계(스토리·콘티·그림)가 지킵니다 — 다른 설정과 충돌하면 이 규칙이 이깁니다</small></summary>
+    <label class="field">
+      <span>항상 적용 <small>한 줄에 하나 · <b class="mem-count" data-kind="always">0</b>자</small></span>
+      <textarea class="mem-always" rows="3"
+    placeholder="예: 초롱은 절대 존댓말을 쓰지 않는다"></textarea>
+    </label>
+    <label class="field">
+      <span>키워드가 나올 때만 <small>「키워드1, 키워드2 :: 내용」 꼴로 한 줄에 하나 · <b class="mem-count" data-kind="keyword">0</b>자</small></span>
+      <textarea class="mem-keyword" rows="3"
+    placeholder="예: 북부대공 :: 북부대공가의 문장은 은빛 늑대다"></textarea>
+    </label>
+    <div class="regen-actions">
+      <button type="button" class="btn btn-quiet btn-sm mem-save">규칙 저장</button>
+      <span class="regen-note mem-status"></span>
+    </div>
+  </details>
+
+  <div class="reader" id="reader"></div>
+
+  <!-- 다 읽은 자리. "이어서 볼래?" 와 "남에게 보여줄래?" 는 읽기 **전**이 아니라
+       읽고 **난 뒤**에 생기는 마음이라, 머리에 두지 않고 여기로 내렸다. -->
+  <div class="read-end" id="readEnd">
+    <button type="button" class="btn btn-primary" id="moreCutsBtn" hidden>다음 장면 이어서 보기</button>
+    <button type="button" class="btn btn-primary" id="nextEpBtn" hidden>다음 화 만들기</button>
+    <!-- 다 읽고 나서 할 일은 하나로 줄였다. 목록·새로 만들기·홈은 위 상단
+         바에 이미 있고, 여기에 또 늘어놓으면 읽기를 끝낸 사람 앞에 나가는
+         길만 넷이 된다. 웹툰이 길어서 위로 돌아갈 길은 필요하다. -->
+    <div class="read-end-links">
+      <button type="button" class="inline-link" id="toTopBtn">↑ 맨 위로</button>
+    </div>
+  </div>
+
+</section>
+
+<!-- ============================================================ 다음 화 (#72)
+     1화용 진행 화면(#progress)을 재사용하지 않는다. 이어 만들기는 도는 단계가
+     셋뿐이고(콘티·그림·잇기), 사람이 궁금해하는 것도 다르다 — "인물이 그대로
+     따라오는가", "몇 화가 나오는가". 그래서 화면을 따로 둔다. -->
+<section id="nextEp" class="nextep" hidden>
+  <header class="nextep-head">
+    <p class="eyebrow" id="nextEpWork"></p>
+    <h2 id="nextEpTitle">다음 화 만들기</h2>
+    <p class="nextep-sub" id="nextEpSub"></p>
+  </header>
+
+  <!-- 시작 전 — 무엇을 물려받는지 밝히고, 이번 화에 바라는 것을 받는다 -->
+  <div class="nextep-ask" id="nextEpAsk">
+    <ul class="nextep-keeps">
+      <li><b>그대로 갑니다</b> — 인물·세계관·캐릭터 시트·그림체</li>
+      <li><b>이어집니다</b> — 앞 화에서 정해진 설정과 아직 안 풀린 복선</li>
+      <li><b>새로 만듭니다</b> — 이 화의 콘티(컷·대사)와 그림</li>
+    </ul>
+    <label class="field">
+      <span>이번 화는 어떻게 갈까요? <small>안 적어도 됩니다</small></span>
+      <textarea id="nextEpNote" rows="2" maxlength="500"
+        placeholder="예: 둘이 처음으로 크게 싸우는 화 / 학교 밖으로 나가는 이야기"></textarea>
+    </label>
+    <div class="nextep-actions">
+      <button type="button" class="btn btn-primary" id="nextEpGo">이어서 만들기</button>
+      <button type="button" class="btn btn-quiet" id="nextEpBack">돌아가기</button>
+    </div>
+    <p class="nextep-warn">
+      실제로 그림을 그립니다 — 한 화에 몇 분이 걸리고 생성 비용이 나갑니다.
+    </p>
+  </div>
+
+  <!-- 도는 중 -->
+  <div class="nextep-run" id="nextEpRun" hidden>
+    <ol class="nextep-steps" id="nextEpSteps"></ol>
+    <p class="nextep-note" id="nextEpNote2">시작하는 중…</p>
+    <div class="nextep-actions">
+      <button type="button" class="btn btn-quiet btn-sm" id="nextEpCancel">중단</button>
+    </div>
+  </div>
+</section>
+
+<footer class="foot">
+  <span>LORE 웹툰 스튜디오</span>
+  <span class="foot-note">고래 <b>루</b>가 안내합니다 · 말풍선과 대사는 그림 안에 함께 그려집니다</span>
+</footer>
+
+<!-- 확인 팝업은 **진행 화면 밖**에 둔다. 안에 두면 #progress 가 숨는 순간
+     (둘러보기·마이페이지로 나가 있을 때) 같이 숨어서 아예 못 뜬다 — 그런데
+     이 팝업이 뜨는 동안은 서버에서도 아무것도 안 돌아가므로, 어느 화면에
+     있든 반드시 보여야 한다. -->
+    <!-- 확인이 필요한 자리는 **팝업**으로 띄운다. 예전에는 진행 화면 아래에
+         그냥 붙어 있어서, 기다리는 사람은 화면 위(진행 바·루)를 보고 있다가
+         자기 차례가 온 것을 몰랐다 — 아래로 내려야 보이는 알림은 알림이
+         아니다. 바깥을 눌러도 안 닫는다: 여기서 고르지 않으면 아무것도
+         진행되지 않으므로, 실수로 닫아 놓고 멈춘 줄 아는 것이 더 나쁘다. -->
+    <div class="modal-veil approval-veil" id="approvalModal" hidden>
+      <div class="modal-box approval-box" role="dialog" aria-modal="true">
+      <div class="sheet-approval" id="sheetApproval" hidden>
+        <div class="sheet-approval-head">
+          <h3>캐릭터 시트를 확인해 주세요</h3>
+          <p>이제부터 모든 컷이 이 얼굴을 따라갑니다. 원본과 다르면 여기서 다시 만드세요 —
+             진행한 뒤에는 뒤 컷 전부가 이 시트를 기준으로 그려집니다.</p>
+        </div>
+        <div class="sheet-approval-compare">
+          <figure class="sheet-approval-photo" id="approvalPhotoBox" hidden>
+            <img id="approvalPhoto" alt="업로드한 원본 사진">
+            <figcaption>원본</figcaption>
+          </figure>
+          <figure class="sheet-approval-sheet">
+            <img id="approvalSheet" alt="생성된 캐릭터 시트">
+            <figcaption>생성된 시트</figcaption>
+          </figure>
+        </div>
+        <!-- 외형 사양을 직접 고치는 폼은 전문 모드에서만 연다. 일반 모드는 아래
+             항목(무엇이 마음에 안 드나요)을 고르고 다시 만들기만 한다 — 영문
+             appearance_en 을 손으로 쓰는 것은 "간단하게 만들기"가 약속한 것과
+             정반대다. 폼이 없어도 다시 만들기는 그대로 돈다(시트 폴더를 지우고
+             한 번 더 뽑는다). -->
+        <details class="sheet-approval-edit" data-expert-only>
+          <summary>틀린 부분 고치기 (이름 · 외형 · 고정 소지품)</summary>
+          <p class="sheet-approval-edit-hint">
+            여기서 고친 내용은 "수정 반영해서 다시 만들기"를 눌러야 반영됩니다 —
+            글자만 고치고 "이대로 진행"을 누르면 지금 보이는 그림 그대로
+            확정됩니다.
+          </p>
+          <label class="field">
+            <span>이름</span>
+            <input type="text" id="sheetEditName">
+          </label>
+          <label class="field">
+            <span>외형 묘사 (영문 — 이미지 생성에 그대로 들어갑니다)</span>
+            <textarea id="sheetEditAppearance" rows="4"></textarea>
+          </label>
+          <label class="field">
+            <span>고정 소지품·복장 (한 줄에 하나씩 — 지팡이, 모자 등)</span>
+            <textarea id="sheetEditDetails" rows="3"></textarea>
+          </label>
+        </details>
+        <!-- 고른 항목과 적은 말은 지시문으로 옮겨져(pipeline.SHEET_FIX_BY_TAG)
+             다음 판 시트 프롬프트 끝의 CORRECTIONS 절에 실립니다. 한글이 막히는
+             곳은 appearance_en 하나뿐이라(gate_charsheet_source) 한국어 지시가
+             그대로 나갑니다. 위 "틀린 부분 고치기" 폼은 사양 자체를 바꾸는 다른
+             길이고, 둘은 같이 써도 됩니다. -->
+        <div class="fb-box" data-fb-stage="sheet">
+          <p class="fb-lead">무엇이 마음에 안 드나요?
+            <small>체크하면 루가 다시 그릴 때 훨씬 쉬워요!</small></p>
+          <div class="fb-tags"></div>
+          <label class="field fb-etc-note">
+            <span>기타</span>
+            <textarea class="fb-text" rows="2"
+              placeholder="예: 망토를 안 그렸어요 / 묶은머리인데 풀려 있어요"></textarea>
+          </label>
+        </div>
+        <div class="sheet-approval-actions">
+          <button type="button" class="btn btn-quiet" id="sheetRetryBtn">수정 반영해서 다시 만들기</button>
+          <button type="button" class="btn btn-primary" id="sheetApproveBtn">이대로 진행</button>
+        </div>
+      </div>
+
+      <div class="sheet-approval" id="storyApproval" hidden>
+        <div class="sheet-approval-head">
+          <h3>이야기 구조를 확인해 주세요</h3>
+          <p class="approval-reason" id="storyApprovalReason"></p>
+          <p>
+            자동으로 다시 쓰는 시도(게이트 재시도)를 다 써서 더 못 고쳤습니다.
+            <b>이대로 진행</b>하면 지금 이 상태 그대로 다음 단계(캐릭터 시트)로
+            넘어갑니다 — <b>다시 만들기</b>를 누르면 같은 캐릭터로 이야기를
+            처음부터 새로 뽑습니다(새 시도이니 다른 결과가 나올 수 있습니다).
+          </p>
+        </div>
+        <!-- **무엇을** 확인할지. 이것이 없던 동안 이 화면은 "이대로 진행할까요?"
+             만 묻고 정작 이야기를 안 보여줬다 — 사람은 찍어서 눌러야 했다. -->
+        <div class="approval-preview" id="storyPreview"></div>
+        <div class="fb-box" data-fb-stage="story">
+          <p class="fb-lead">무엇이 마음에 안 드나요?
+            <small>체크하면 루가 다시 쓸 때 훨씬 쉬워요!</small></p>
+          <div class="fb-tags"></div>
+          <label class="field fb-etc-note">
+            <span>기타</span>
+            <textarea class="fb-text" rows="2"
+              placeholder="예: 로맨스가 하나도 없어요 / 성격이 갑자기 진지해져요"></textarea>
+          </label>
+        </div>
+        <details class="mem-box">
+          <summary>작품 규칙 <small>모든 단계(스토리·콘티·그림)가 지킵니다 — 다른 설정과 충돌하면 이 규칙이 이깁니다</small></summary>
+          <label class="field">
+            <span>항상 적용 <small>한 줄에 하나 · <b class="mem-count" data-kind="always">0</b>자</small></span>
+            <textarea class="mem-always" rows="3"
+              placeholder="예: 초롱은 절대 존댓말을 쓰지 않는다"></textarea>
+          </label>
+          <label class="field">
+            <span>키워드가 나올 때만 <small>「키워드1, 키워드2 :: 내용」 꼴로 한 줄에 하나 · <b class="mem-count" data-kind="keyword">0</b>자</small></span>
+            <textarea class="mem-keyword" rows="3"
+              placeholder="예: 북부대공 :: 북부대공가의 문장은 은빛 늑대다"></textarea>
+          </label>
+          <div class="regen-actions">
+            <button type="button" class="btn btn-quiet btn-sm mem-save">규칙 저장</button>
+            <span class="regen-note mem-status"></span>
+          </div>
+        </details>
+        <div class="sheet-approval-actions">
+          <button type="button" class="btn btn-quiet" id="storyRetryBtn">다시 만들기</button>
+          <button type="button" class="btn btn-primary" id="storyApproveBtn">이대로 진행</button>
+        </div>
+      </div>
+
+      <div class="sheet-approval" id="boardApproval" hidden>
+        <div class="sheet-approval-head">
+          <h3>콘티(컷 설계)를 확인해 주세요</h3>
+          <p class="approval-reason" id="boardApprovalReason"></p>
+          <p id="boardApprovalExplain">
+            자동으로 다시 쓰는 시도(게이트 재시도)를 다 써서 더 못 고쳤습니다.
+            <b>이대로 진행</b>하면 지금 이 콘티 그대로 그림 단계로 넘어갑니다 —
+            <b>다시 만들기</b>를 누르면 콘티를 처음부터 다시 짭니다(새 시도이니
+            다른 결과가 나올 수 있습니다).
+          </p>
+        </div>
+        <!-- 스토리 쪽과 같은 이유 — 컷과 대사를 보여주고 물어본다. -->
+        <div class="approval-preview" id="boardPreview"></div>
+        <div class="fb-box" data-fb-stage="board">
+          <p class="fb-lead">무엇이 마음에 안 드나요?
+            <small>체크하면 루가 다시 짤 때 훨씬 쉬워요!</small></p>
+          <div class="fb-tags"></div>
+          <label class="field fb-etc-note">
+            <span>기타</span>
+            <textarea class="fb-text" rows="2"
+              placeholder="예: 생쥐를 구하는 장면이 통째로 빠졌어요"></textarea>
+          </label>
+        </div>
+        <details class="mem-box">
+          <summary>작품 규칙 <small>모든 단계(스토리·콘티·그림)가 지킵니다 — 다른 설정과 충돌하면 이 규칙이 이깁니다</small></summary>
+          <label class="field">
+            <span>항상 적용 <small>한 줄에 하나 · <b class="mem-count" data-kind="always">0</b>자</small></span>
+            <textarea class="mem-always" rows="3"
+              placeholder="예: 초롱은 절대 존댓말을 쓰지 않는다"></textarea>
+          </label>
+          <label class="field">
+            <span>키워드가 나올 때만 <small>「키워드1, 키워드2 :: 내용」 꼴로 한 줄에 하나 · <b class="mem-count" data-kind="keyword">0</b>자</small></span>
+            <textarea class="mem-keyword" rows="3"
+              placeholder="예: 북부대공 :: 북부대공가의 문장은 은빛 늑대다"></textarea>
+          </label>
+          <div class="regen-actions">
+            <button type="button" class="btn btn-quiet btn-sm mem-save">규칙 저장</button>
+            <span class="regen-note mem-status"></span>
+          </div>
+        </details>
+        <div class="sheet-approval-actions">
+          <button type="button" class="btn btn-quiet" id="boardRetryBtn">다시 만들기</button>
+          <button type="button" class="btn btn-primary" id="boardApproveBtn">이대로 진행</button>
+        </div>
+      </div>
+
+      <!-- 그림 검수 결과 (전문 모드). 앞의 셋과 달리 "다시 만들기" 가 없다 —
+           그림은 이미 다 나왔고, 고치는 것은 결과 화면의 장 단위 다시 그리기다.
+           이 화면이 하는 일은 검수가 무엇을 했는지 끝나기 전에 한 번 보여주는
+           것이다. 일반 모드는 이 자리를 안 세우고, 못 고친 것만 결과 화면의
+           노트로 알린다. -->
+      <div class="sheet-approval" id="artqaApproval" hidden>
+        <div class="sheet-approval-head">
+          <h3>그림 검수 결과를 확인해 주세요</h3>
+          <p id="artqaSummary"></p>
+        </div>
+        <div class="qa-groups">
+          <div class="qa-group" id="artqaUnresolvedBox" hidden>
+            <h4>다시 그려도 못 고친 것</h4>
+            <p class="qa-group-lede">
+              여기 있는 장은 <b>그대로 완성본에 들어갑니다.</b> 마음에 안 들면 다음
+              화면에서 장을 골라 직접 다시 그려 주세요 — 그때는 무엇이 문제인지
+              적을 수 있어서 검수보다 잘 고칩니다.
+            </p>
+            <ul class="qa-list" id="artqaUnresolved"></ul>
+          </div>
+          <div class="qa-group" id="artqaFixedBox" hidden>
+            <h4>검수가 잡아서 다시 그린 것</h4>
+            <p class="qa-group-lede">
+              아래 장은 처음 그린 것이 서술과 달라서 검수가 다시 그리게 했고,
+              지금은 통과한 것입니다. 손대실 것은 없습니다.
+            </p>
+            <ul class="qa-list" id="artqaFixed"></ul>
+          </div>
+        </div>
+        <div class="fb-box" data-fb-stage="scene">
+          <p class="fb-lead">검수가 놓친 것이 있나요?
+            <small>체크해두면 루가 잊지 않고 기억해요!</small></p>
+          <div class="fb-tags"></div>
+          <label class="field fb-etc-note">
+            <span>기타</span>
+            <textarea class="fb-text" rows="2"
+              placeholder="예: 3장에 손가락이 여섯 개인데 검수가 못 잡았어요"></textarea>
+          </label>
+        </div>
+        <div class="sheet-approval-actions">
+          <button type="button" class="btn btn-primary" id="artqaApproveBtn">확인했습니다 — 완성하기</button>
+        </div>
+      </div>
+      </div>
+    </div>
+
+<div class="toast" id="toast" hidden></div>
+
+<!-- 떠 있는 진행 표시. 만드는 중에 다른 화면(둘러보기·마이페이지·완성본)으로
+     가면 여기에 붙어 따라다닌다 — 웹툰 한 편은 몇 분이 걸리는데 그동안 화면을
+     붙잡아 두면 기다림이 곱절로 길다. 끌어서 옮기고, 접어서 가장자리로 치울 수
+     있다. 누르면 진행 화면으로 돌아간다.
+     진행 화면(running)에서는 자체가 진행 화면이므로 뜨지 않는다. -->
+<div class="minip" id="miniProg" hidden>
+  <button type="button" class="minip-body" id="miniProgGo"
+          aria-label="만드는 중 — 눌러서 진행 화면으로">
+    <svg class="minip-ring" viewBox="0 0 44 44" aria-hidden="true">
+      <circle class="minip-track" cx="22" cy="22" r="19"></circle>
+      <circle class="minip-fill" cx="22" cy="22" r="19" id="miniProgArc"></circle>
+    </svg>
+    <img class="minip-face" id="miniProgFace" src="/static/lou/react/idle/01.webp" alt="">
+    <span class="minip-pct" id="miniProgPct">0%</span>
+  </button>
+  <button type="button" class="minip-x" id="miniProgHide" aria-label="접기">×</button>
+</div>
+<!-- 접었을 때 남는 손잡이. 완전히 없애지 않는 이유: 도로 펼 길이 사라지면
+     "꺼졌다"와 구분이 안 되고, 확인이 필요해 멈춰 있을 때 알릴 자리도 없어진다. -->
+<button type="button" class="minip-tab" id="miniProgTab" hidden
+        aria-label="진행 표시 펼치기"><span id="miniProgTabPct">0%</span></button>
+
+<script src="/static/base.js"></script>
+<script src="/static/lou-art.js"></script>
+<script src="/static/lou-play.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

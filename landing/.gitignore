@@ -1,0 +1,13 @@
+# 실행마다 쌓이는 것 — 입력·설정·로그·올린 사진·축소 캐시.
+# 산출물 자체는 여기 없습니다 (story-harness/runs, webtoon-harness/outputs 에 남습니다).
+jobs/
+
+# new_harness 연결(newharness_pipeline.py)의 job 폴더. 산출물은
+# new_harness/runs/ 에 남는다 — jobs/ 와 같은 취급.
+jobs_nh/
+
+# 크레딧 잔액·결제 로그 — 서버가 계속 고쳐 쓰는 상태라 jobs/ 와 같은 취급.
+data/
+
+__pycache__/
+*.pyc

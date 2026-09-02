@@ -1,0 +1,136 @@
+/* 사용자 검수 화면 — 방향 고르기 · 콘티 · 캐릭터 시트.
+ *
+ * newharness.html(실제 동작)과 demo.html(목업)이 **같은 파일을 읽는다.**
+ * demo.html 은 원래 index.html 의 진행 화면 마크업을 손으로 베껴 두고
+ * "본편이 바뀌면 여기도 같이 고친다"는 주석에 기대고 있었는데, 검수 화면은
+ * 그렇게 두면 금세 어긋난다(컷 칸이 늘어날 자리라서). 스타일만이라도
+ * 한 곳에 둔다.
+ *
+ * 색은 style.css 의 변수를 쓰되, 없을 때를 대비해 기본값을 같이 적는다 —
+ * newharness.html 은 style.css 를 안 읽는 독립 페이지다. */
+
+/* ---- 방향 고르기 ---- */
+.nh-picker-head { text-align: center; margin: 4px 0 20px; }
+.nh-picker-head h2 { font-size: 20px; margin: 0 0 6px; }
+.nh-picker-head .nh-hint { font-size: 13px; margin: 0; }
+
+.nh-card {
+  border: 2px solid var(--line-2, #e2e2e2); border-radius: 14px; padding: 16px 18px;
+  margin-bottom: 10px; cursor: pointer; background: var(--card, #fff);
+  position: relative; transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+.nh-card:hover {
+  border-color: var(--accent, #0e8fb5);
+  box-shadow: 0 4px 14px rgba(14, 143, 181, .12);
+  transform: translateY(-1px);
+}
+.nh-card.picked {
+  border-color: var(--accent, #0e8fb5);
+  box-shadow: 0 0 0 2px var(--accent, #0e8fb5) inset, 0 6px 18px rgba(14, 143, 181, .18);
+  background: rgba(14, 143, 181, .05);
+}
+.nh-card.picked::after {
+  content: "✓ 선택됨"; position: absolute; top: 12px; right: 14px;
+  font-size: 11px; font-weight: 700; color: var(--accent-d, #0a5f7a);
+  background: rgba(14, 143, 181, .14); padding: 2px 9px; border-radius: 999px;
+}
+.nh-card h3 { margin: 0 22px 6px 0; font-size: 16px; }
+.nh-card p { margin: 4px 0; font-size: 13px; color: #555; line-height: 1.5; }
+.nh-card ul { margin: 6px 0 0; padding-left: 18px; font-size: 13px; color: #555; }
+
+/* 장면 목록은 접어 둔다 — 고르는 데 필요한 것은 제목·장르·줄거리이고,
+   넷을 나란히 놓고 견줄 때 장면까지 펼쳐져 있으면 카드가 길어져서 한
+   화면에 안 들어온다. 보고 싶은 사람만 편다. */
+.nh-card details { margin-top: 8px; }
+.nh-card summary {
+  font-size: 12px; color: #777; cursor: pointer; list-style: none;
+  display: inline-flex; align-items: center; gap: 4px; padding: 2px 0;
+}
+.nh-card summary::-webkit-details-marker { display: none; }
+.nh-card summary::before { content: "▸"; font-size: 10px; }
+.nh-card details[open] summary::before { content: "▾"; }
+.nh-card summary:hover { color: #222; }
+
+/* ---- 검수(콘티·시트) ---- */
+.nh-approval {
+  border: 1px solid var(--line-2, #ddd); border-radius: 10px; padding: 16px;
+  background: var(--card, #fff); margin-top: 12px;
+}
+.nh-approval h2 { font-size: 16px; margin: 0 0 10px; }
+.nh-hint { font-size: 12px; color: #777; margin: 6px 0; }
+.nh-cast { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.nh-cast span {
+  background: var(--ink-2, #f2f2f2); border-radius: 999px; padding: 4px 10px; font-size: 12px;
+}
+.nh-scene { border-top: 1px solid var(--line-2, #eee); padding: 12px 0; }
+.nh-scene:first-child { border-top: none; }
+.nh-scene .nh-scene-head { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+.nh-scene .nh-scene-where { font-size: 12px; color: #888; margin: 0 0 6px; }
+.nh-scene .nh-scene-sum { font-size: 12px; color: #666; margin: 0 0 10px; }
+
+/* 컷 하나 = 그림 한 칸. 검수하는 사람이 봐야 하는 것은 대사가 아니라
+   "이 칸이 어떤 그림이 되는가" 라서, 카메라·배경·인물을 같이 보여준다. */
+.nh-cut {
+  border-left: 2px solid var(--line-2, #e5e5e5); padding: 0 0 0 10px;
+  margin: 0 0 10px; font-size: 12px; color: #444;
+}
+.nh-cut-head {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 4px;
+}
+.nh-cut-no { font-weight: 600; color: #222; }
+.nh-tag {
+  font-size: 11px; color: #666; background: var(--chip, #f2f2f2);
+  border-radius: 999px; padding: 1px 7px; white-space: nowrap;
+}
+.nh-cut-bg { color: #777; margin: 2px 0; line-height: 1.5; }
+.nh-cut-who { margin: 3px 0; line-height: 1.5; }
+.nh-cut-who b { font-weight: 600; color: #222; }
+.nh-line { margin: 3px 0; line-height: 1.5; }
+.nh-line i { font-style: normal; color: #888; margin-right: 4px; }
+.nh-sfx { color: #a06; }
+
+/* 콘티는 길다(컷 25개가 흔하다). 장면마다 접어 두고 첫 장면만 펴 둔다 —
+   다 펴 두면 "이대로 진행" 단추까지 한참 스크롤해야 한다. */
+.nh-scene > details > summary {
+  font-size: 12px; color: #777; cursor: pointer; list-style: none;
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.nh-scene > details > summary::-webkit-details-marker { display: none; }
+.nh-scene > details > summary::before { content: "▸"; font-size: 10px; }
+.nh-scene > details[open] > summary::before { content: "▾"; }
+.nh-scene > details > summary:hover { color: #222; }
+.nh-scene > details > div { margin-top: 8px; }
+
+.nh-approval-actions { display: flex; gap: 8px; margin-top: 14px; }
+.nh-approval-actions .btn { flex: 1; }
+.nh-sheet-img { width: 100%; border-radius: 8px; display: block; margin-bottom: 12px; }
+
+/* ---- 다시 만들기 요청 칸 ---- */
+.nh-retry-note {
+  margin-top: 10px; padding: 12px; border: 1px dashed var(--line-2, #ccc);
+  border-radius: 8px; background: var(--ink-2, #fafafa);
+}
+.nh-retry-note textarea {
+  width: 100%; min-height: 64px; padding: 8px 10px; border: 1px solid #ccc;
+  border-radius: 6px; font: inherit; font-size: 13px; box-sizing: border-box; resize: vertical;
+}
+.nh-retry-note-actions { display: flex; gap: 8px; margin-top: 8px; justify-content: flex-end; }
+.nh-retry-note-actions .btn { flex: 0 0 auto; }
+
+/* ---- 반응형: PC 화면에서 크게, 모바일에서 안 깨지게 ----
+   방향 카드·시트는 좁은 모바일 폭(.nh-wrap 640px)에 맞춰 만들어졌던 것을,
+   넓은 화면에서는 카드를 2열로 펼치고 글자를 키워 화면을 더 채운다. 모바일
+   (480px 이하)은 padding·글자만 살짝 줄여 잘리지 않게 한다. */
+@media (min-width: 720px) {
+  #cards, #nhCards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; align-items: start; }
+  .nh-card { margin-bottom: 0; padding: 18px 20px; }
+  .nh-card h3 { font-size: 17px; }
+  .nh-card p { font-size: 14px; }
+  .nh-card ul { font-size: 14px; }
+  .nh-sheet-img { max-width: 520px; margin-left: auto; margin-right: auto; }
+}
+@media (max-width: 480px) {
+  .nh-card { padding: 12px; }
+  .nh-card h3 { font-size: 14px; }
+  .nh-approval { padding: 12px; }
+}

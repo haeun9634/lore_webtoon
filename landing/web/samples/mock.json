@@ -1,0 +1,250 @@
+{
+  "episode": 1,
+  "title": "약속의 무게, 장난의 시작",
+  "character": "모모",
+  "genre": "로맨스 판타지",
+  "style_label": "일반 웹툰",
+  "logline": "불의 무구를 든 장난기 많은 공녀, 실수로 내뱉은 말이 곧 법이 되는 세계에서 자유를 꿈꾸지만, 그 책임이 그녀와 사랑 앞에 족쇄가 된다.",
+  "cuts_per_sheet": 3,
+  "scenes": [
+    {
+      "no": 1,
+      "image": "/static/samples/mock/scene1.jpg",
+      "w": 900,
+      "h": 1612,
+      "cuts": [
+        {
+          "no": 1,
+          "shot": "원경",
+          "beat": "setup",
+          "speaker": "",
+          "dialogue": "",
+          "narration": "이 세계에선, 불의 무구를 든 계승자의 한마디가 모두의 약속이 된다.",
+          "thought": "",
+          "sfx": "",
+          "description": "넓은 대연회장 입구 복도. 붉은 카펫이 중앙 홀로 이어지며, 양쪽으로 대리석 기둥과 금빛 화병이 정렬되어 있다. 저녁빛이 들어오고, 저 멀리 카펫 중간에 선 모모가 작게 보인다.",
+          "lines": [
+            {
+              "kind": "narration",
+              "text": "이 세계에서 왕위 계승 자격이 있는 자가 불의 무구를 들고 내뱉는 말은, 농담이라도 곧바로 모두의 약속이 된다.",
+              "speaker": "",
+              "side": ""
+            }
+          ]
+        },
+        {
+          "no": 2,
+          "shot": "전신",
+          "beat": "build",
+          "speaker": "모모",
+          "dialogue": "",
+          "narration": "",
+          "thought": "또… 다들 날 보겠지. 이번엔 무사히 넘어갈 수 있을까?",
+          "sfx": "터벅",
+          "description": "모모가 카펫 위를 천천히 걸어나오고 있다. 한 손엔 분홍빛 검, 머리 위에 작은 금빛 왕관, 연한 분홍 머리와 큰 리본이 눈에 띈다. 어깨와 등이 작게 움츠러져 있다.",
+          "lines": [
+            {
+              "kind": "thought",
+              "text": "또 시작이다… 이번엔 진짜 무심코 말하면 안 될 텐데.",
+              "speaker": "모모",
+              "side": "center"
+            }
+          ]
+        },
+        {
+          "no": 3,
+          "shot": "인서트",
+          "beat": "hold",
+          "speaker": "",
+          "dialogue": "",
+          "narration": "",
+          "thought": "",
+          "sfx": "",
+          "description": "붉은 카펫 위, 모모가 손에 쥔 분홍빛 검(불의 무구)과 손가락 사이의 하얀 리본, 손끝이 약간 떨리고 있다.",
+          "lines": []
+        }
+      ]
+    },
+    {
+      "no": 2,
+      "image": "/static/samples/mock/scene2.jpg",
+      "w": 900,
+      "h": 1612,
+      "cuts": [
+        {
+          "no": 4,
+          "shot": "중간",
+          "beat": "build",
+          "speaker": "",
+          "dialogue": "",
+          "narration": "“공녀님의 첫 공식 약속을 부탁드립니다.”\n모두의 시선이 모인다.",
+          "thought": "",
+          "sfx": "",
+          "description": "모모가 연회장 중앙 카펫 위에 서서, 앞쪽의 귀족 무리를 바라보고 있다. 모두가 그녀를 향해 조용히 시선을 집중하는 장면.",
+          "lines": [
+            {
+              "kind": "narration",
+              "text": "공녀님의 첫 공식 약속을 부탁드립니다—귀족들의 시선이 저마다 모모에게 쏟아진다.",
+              "speaker": "",
+              "side": ""
+            }
+          ]
+        },
+        {
+          "no": 5,
+          "shot": "인서트",
+          "beat": "build",
+          "speaker": "",
+          "dialogue": "",
+          "narration": "",
+          "thought": "",
+          "sfx": "",
+          "description": "귀족 좌석 옆 테이블 위에 놓인 비단 약속문 두루마리, 깃털 펜, 은쟁반 위 붉은 포도주잔이 조명에 반짝인다.",
+          "lines": []
+        },
+        {
+          "no": 6,
+          "shot": "바스트",
+          "beat": "turn",
+          "speaker": "모모",
+          "dialogue": "정말 다들 내 말 따라주는 거죠? 그럼—오늘은 연회장에선 거짓말 금지! 장난 아니에요?",
+          "narration": "",
+          "thought": "",
+          "sfx": "툭툭",
+          "description": "모모가 입꼬리만 살짝 올리고 손끝으로 검의 자루를 툭툭 두드리며, 귀족 무리를 향해 분홍빛 동그란 눈을 반달로 휘며 바라본다.",
+          "lines": [
+            {
+              "kind": "dialogue",
+              "text": "이거, 정말로 다들 따라줘야 하는 거죠? 그럼 오늘부로—연회장에선 거짓말 하지 않기! 어때요?",
+              "speaker": "모모",
+              "side": "center"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "no": 3,
+      "image": "/static/samples/mock/scene3.jpg",
+      "w": 900,
+      "h": 1612,
+      "cuts": [
+        {
+          "no": 7,
+          "shot": "중간",
+          "beat": "build",
+          "speaker": "",
+          "dialogue": "",
+          "narration": "당황한 눈빛, 얼떨결에 움직이는 손. 농담인 줄 알았던 말에 모두가 멈춘다.",
+          "thought": "",
+          "sfx": "사락",
+          "description": "귀족 무리 중 몇몇이 당황스러운 듯 서로를 바라보다가, 한 명이 두루마리에 급히 약속을 써내려가기 시작한다.",
+          "lines": [
+            {
+              "kind": "narration",
+              "text": "누군가는 인상을 찌푸리고, 누군가는 손을 떨며 새 약속문을 펼친다.",
+              "speaker": "",
+              "side": ""
+            }
+          ]
+        },
+        {
+          "no": 8,
+          "shot": "인서트",
+          "beat": "hold",
+          "speaker": "",
+          "dialogue": "",
+          "narration": "에르반은 빠짐없이 그 약속을 기록한다.",
+          "thought": "",
+          "sfx": "",
+          "description": "에르반(남성, 밤색 단발, 검은 정장, 작은 금테 안경)이 약속문을 조심스럽게 들어올려 확인하고 있다. 손끝에 약간의 긴장감이 담겨 있다.",
+          "lines": [
+            {
+              "kind": "narration",
+              "text": "왕실 비서관 에르반이 약속문을 한 글자씩 확인한다.",
+              "speaker": "",
+              "side": ""
+            }
+          ]
+        },
+        {
+          "no": 9,
+          "shot": "전신",
+          "beat": "build",
+          "speaker": "모모",
+          "dialogue": "",
+          "narration": "",
+          "thought": "내가 던진 농담이, 모두의 얼굴을 굳게 만들었어.",
+          "sfx": "",
+          "description": "모모가 약간 뒷모습으로, 여전히 검을 들고 몸을 돌린다. 머리 리본 끝이 길게 뒤로 늘어진다. 그녀의 시선이 어디론가 옮겨간다.",
+          "lines": [
+            {
+              "kind": "thought",
+              "text": "…내가 한 말이, 진짜 약속이 되어버렸어.",
+              "speaker": "모모",
+              "side": "center"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "no": 4,
+      "image": "/static/samples/mock/scene4.jpg",
+      "w": 900,
+      "h": 1612,
+      "cuts": [
+        {
+          "no": 10,
+          "shot": "바스트",
+          "beat": "release",
+          "speaker": "모모",
+          "dialogue": "",
+          "narration": "",
+          "thought": "이젠 정말 물러설 수 없어. 내가 시작했으니까.",
+          "sfx": "",
+          "description": "모모가 입술을 깨물며 미소가 사라진다. 동그란 눈에 결의와 약간의 흔들림이 맺힌다. 목의 리본이 살짝 떨려 보인다.",
+          "lines": [
+            {
+              "kind": "thought",
+              "text": "이젠 물러설 수 없어. 책임져야 해.",
+              "speaker": "모모",
+              "side": "center"
+            }
+          ]
+        },
+        {
+          "no": 11,
+          "shot": "인서트",
+          "beat": "turn",
+          "speaker": "",
+          "dialogue": "",
+          "narration": "",
+          "thought": "",
+          "sfx": "사락",
+          "description": "하얀 비단 두루마리에 검은 잉크로 '연회장에서 거짓말을 금함'이라는 공식 약속문이 또박또박 씌어지고 있다.",
+          "lines": []
+        },
+        {
+          "no": 12,
+          "shot": "클로즈업",
+          "beat": "hold",
+          "speaker": "",
+          "dialogue": "",
+          "narration": "아델리아만이 알 듯, 모모를 향한 의미심장한 미소를 짓는다.",
+          "thought": "",
+          "sfx": "",
+          "description": "화면 오른쪽 구석, 아델리아(여성, 짧은 은회색 머리, 장신 체형, 남색 군복 차림, 목덜미에 칼자국)가 군중 너머 모모를 바라본다. 입꼬리가 미세하게 올라간다.",
+          "lines": [
+            {
+              "kind": "narration",
+              "text": "아델리아가 모모만이 눈치챌 작은 미소를 짓는다.",
+              "speaker": "",
+              "side": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

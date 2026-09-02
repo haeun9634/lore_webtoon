@@ -1,0 +1,132 @@
+세로로 읽는 웹툰 페이지를 그린다.
+
+## 이 페이지의 크기
+- 세로가 가로의 1.78배인 한 장이다. 아래 컷들이 이 한 장을 위에서 아래로 나눠 쓴다.
+
+## 첨부한 이미지
+
+첨부한 이미지는 참고 자료이며, 페이지를 그대로 복사하거나 재구성하는 것이 아니다.
+
+### 캐릭터 시트 — 최우선 스타일 및 캐릭터 기준
+
+캐릭터 시트는 단순한 외형 참고 자료가 아니다.
+**이 작품의 캐릭터 작화 스타일을 결정하는 최우선 시각적 기준이다.**
+
+캐릭터 시트에 나타난 실제 작화의
+선화 방식, 선의 굵기와 밀도, 얼굴의 단순화,
+눈의 형태와 표현, 머리카락의 묘사 방식,
+피부 표현, 색의 사용 방식, 명암의 단순화,
+채색 방식, 전체적인 2D 만화 느낌과 마감 방식을
+웹툰의 모든 인물에게 일관되게 적용한다.
+
+아래 「그림체」 설명은 캐릭터 시트의 스타일을 대체하는 것이 아니다.
+**캐릭터 시트의 실제 시각적 결과를 최우선으로 유지하면서,
+아래 설명은 그 스타일이 장면마다 무너지지 않도록 보조하는 규칙으로 사용한다.**
+
+웹툰 장면을 만들 때 캐릭터 시트보다 더 사실적이거나,
+더 회화적이거나, 더 영화적이거나,
+더 화려하게 렌더링하지 않는다.
+
+캐릭터 시트에서 보이는 것보다
+더 복잡한 피부 질감, 머리카락 질감,
+현실적인 광원, 과도한 명암, 사실적인 재질 표현을 추가하지 않는다.
+
+**캐릭터 시트의 작화 언어를 그대로 유지한 채 장면만 새롭게 구성한다.**
+
+단, 캐릭터 시트의 4면도, 표정 배열, 색상칩,
+시트의 배치와 레이아웃 자체는 재현하지 않는다.
+캐릭터 시트에 등장하는 인물의 외형과 작화 스타일만 참조한다.
+
+### 직전 페이지
+
+직전 페이지는 인물·공간·시간대·의상·사건의 연속성을 위한 참고 자료다.
+
+직전 페이지의 스타일이나 렌더링 수준이 캐릭터 시트와 다를 경우,
+**항상 캐릭터 시트의 작화 스타일을 우선한다.**
+
+직전 페이지가 더 사실적이거나 화려하게 표현되어 있더라도
+그 렌더링 방식을 따라 하지 않는다.
+
+CHARACTER SHEET PRIORITY:
+
+The attached character sheet's actual rendered art is the primary style
+reference for this character — not just its appearance.
+
+Match the character sheet's real visual language:
+- line quality and line weight
+- facial simplification
+- eye design and eye rendering
+- hair rendering
+- skin and coloring
+- shading and shading density
+- overall 2D finish and rendering density
+
+Do not reinterpret the character sheet into a different art style.
+
+Do not render the character more realistically, more painterly, more
+cinematically, or with more finish than the character sheet shows.
+
+The written style description below (see 그림체 section) is a supporting
+constraint that keeps this style consistent across scenes. It does not
+replace or override the character sheet's actual visual language.
+
+When the written description and the character sheet's actual appearance
+conflict, the character sheet's actual appearance wins.
+
+The final character must look as if the same Korean webtoon artist who
+drew the character sheet drew this page too.
+
+## 페이지 구성
+- 컷을 위에서 아래로 배치한다.
+- 컷 사이에 흰 테두리·검은 테두리 같은 액자 틀을 넣지 않는다. 컷 번호
+  배지(흰 사각형 안에 숫자)도 넣지 않는다 — 어떤 그림체·어떤 그림이든
+  둘 다 넣지 않는다. 컷 구분은 장면 전환 자체(구도·배경 변화)로만
+  드러난다.
+- 컷 높이는 아래 지정된 비율을 따른다.
+
+## 그림체
+
+**IMPORTANT — STYLE REFERENCE PRIORITY**
+
+The attached character sheet is the primary visual style reference for
+this entire artwork.
+
+Match the character sheet's actual visual language: line quality, line
+weight, facial simplification, eye design, hair rendering, coloring,
+shading, color organization, and overall 2D finish.
+
+Do not reinterpret the character sheet into another art style.
+
+The written style description below is a supporting constraint, not a
+replacement for the character sheet.
+
+When the written description conflicts with the actual appearance of the
+character sheet, preserve the character sheet's visual language.
+
+- LD:
+{style}
+
+## 말풍선
+- 지정된 한국어 대사를 말풍선 안에 정확히 그려 넣는다. 글자를 바꾸거나 빼지 않는다.
+- 말풍선은 인물의 얼굴을 가리지 않는 위치에 둔다.
+- 꼬리는 말하는 인물을 향한다. 지정이 있으면 그 방향을 따른다.
+- 한 컷에 말풍선이 여러 개면 위에서 아래 순서로 읽히게 배치한다.
+- 말풍선 모양:
+  - 말: 둥근 타원
+  - 생각: 구름 모양
+  - 외침: 뾰족한 형태
+  - 화면밖: 꼬리를 컷 바깥으로 향하게 하거나 꼬리를 없앤다
+  - 전화·라디오: 각진 형태
+  - 나레이션: 말풍선이 아니라 네모 상자. 컷 위쪽 모서리에 붙인다
+  - 효과음: 말풍선 없이 글자만 그린다
+- 글로 오가는 것(메일, 메시지, 문서)은 말풍선으로 그리지 않는다.
+  화면이나 종이를 그리고 그 안에 글자를 넣는다.
+
+## 지키기
+- 첨부한 캐릭터 시트의 외관을 그대로 따른다.
+- 그리지 말라고 지정된 것은 그리지 않는다.
+- 지정되지 않은 인물을 추가하지 않는다.
+- 인물의 자세는 그 컷에 적힌 동작(표정·행동)을 실제로 하고 있는, 확실히
+  정해진 자세여야 한다. 몸을 애매하게 살짝만 틀고 마는 어정쩡한 자세,
+  뭘 하는지 불분명한 엉거주춤한 자세는 안 된다 — 이건 그림체가 아니라
+  모든 컷에 적용되는 규칙이다.

@@ -1,0 +1,23 @@
+# 가상환경
+.venv/
+
+# API 키 — 절대 커밋하지 않는다
+.env
+**/.env
+
+# 파이썬 캐시
+__pycache__/
+*.pyc
+
+# 실행마다 쌓이는 것 (landing/.gitignore 와 같은 취급)
+landing/jobs/
+landing/jobs_nh/
+landing/data/
+
+# 산출물 — 용량이 크다. 예시 run 은 아래 "!" 로 되살린다
+new_harness/runs/
+story-harness/runs/
+webtoon-harness/outputs/
+
+# 시스템
+.DS_Store

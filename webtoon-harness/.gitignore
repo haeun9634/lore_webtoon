@@ -1,0 +1,10 @@
+.env
+outputs/
+__pycache__/
+*.pyc
+
+# 레퍼런스 이미지는 용량이 커서 커밋하지 않는다 (안내 문서는 남긴다)
+refs/*.png
+refs/*.jpg
+refs/*.jpeg
+!refs/README.md

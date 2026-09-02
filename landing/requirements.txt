@@ -1,0 +1,10 @@
+# 랜딩 서버(serve.py)는 표준 라이브러리만으로 뜨지만, 그림을 다루는 두 자리에서
+# Pillow 가 필요하다:
+#   · 올라온 사진을 줄여 저장 (없으면 사진 업로드가 막힌다)
+#   · 내려보낼 컷을 줄이기 (없으면 원본 그대로 나가서 결과 화면이 아주 느리다)
+Pillow>=10.0
+
+# 하네스를 하위 프로세스로 부르므로 story-harness · webtoon-harness 의
+# requirements 도 같은 환경에 설치돼 있어야 한다.
+-r ../story-harness/requirements.txt
+-r ../webtoon-harness/requirements.txt

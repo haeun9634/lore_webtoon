@@ -1,0 +1,211 @@
+**`romance_fantasy`·`frost`·`webtoon_lock`과 나란한 그림체 중 하나다.**
+`NH_STYLE=action`으로 고른다. 저것들은 전부 컬러 웹툰/일러스트고, 이건
+**흰 종이 + 검은 잉크 선화 위주, 특정 포인트만 실제 컬러**다. 검투·추격·
+마법 발동처럼 임팩트가 필요한 장면에 어울리는 결이다. 화사한 컬러가
+필요한 평소 장면엔 다른 그림체를 고르면 된다 — 이 파일이 그것들을
+대체하지 않는다.
+
+**레퍼런스: `new_harness/runs/action-page6-frost/sample/sample_action.png`**
+(사용자 제공, 2026-08-30). 백지에 검은 선화 위주이고, 색은 눈·장미·검
+손잡이 보석 몇 곳에만 꽉 찬 원색으로 들어가 있다. 아래 문구와 이 샘플이
+어긋나면 샘플이 맞다.
+
+**2026-08-30 재작성.** 첫 버전(흑백 "명도" 렌더링을 grayscale 단계로
+설명)은 모델이 그것을 **머리·망토를 통째로 회색으로 칠하는 것**으로
+해석해서, 회색으로 채색한 그림 위에 선을 얹은 꼴이 됐다 — "선화도 그림도
+아닌 것"의 흑백판이었다. 원인은 "white, light gray, mid gray, dark gray"
+처럼 연속된 회색 단계를 핵심으로 제시한 것 — 회색을 채색 수단으로
+읽혔다. 아래는 그 대신 **회색은 아주 제한적으로만 쓰고, 명도는 잉크의
+선 밀도·해칭·검은 면으로 표현한다**는 쪽으로 다시 쓴 것.
+
+MONOCHROME INK FIRST:
+
+The image must be primarily white paper and black ink.
+
+Do NOT render the artwork as a grayscale painting.
+Do NOT fill the character with gray tones.
+
+Color/value is converted into ink through line density, hatching, shadow
+shapes, and solid black — NOT through continuous grayscale coloring.
+
+Use:
+- white paper for light areas
+- clean black linework for structure
+- solid black ink for deep shadows and dark original colors
+- sparse hatching for intermediate values
+- occasional very light gray only when absolutely necessary, and never as
+  a flat fill
+
+The dominant visual impression must be BLACK INK ON WHITE PAPER. Large
+portions of the character should remain pure white.
+
+Do NOT evenly distribute gray across the character. Do NOT give the
+entire hair, cape, clothing, or skin a gray fill — that reads as a
+"colored painting" even in monochrome, which is exactly wrong.
+
+Dark original colors become stronger black ink and denser shadow/hatching
+areas. Light original colors stay mostly white, with black ink only at
+the shadow lines between strands/folds/forms. Mid-value original colors
+get selective hatching or small localized dark shapes, never a flat gray
+wash over the whole surface.
+
+IMPORTANT MONOCHROME INKING RULE (this is the part that fails most often):
+
+DO NOT use grayscale fill as a substitute for color. The artwork must NOT
+look like a grayscale colored illustration. For every character —
+regardless of whether their original hair, skin, or clothing color was
+light or dark — render the material primarily through BLACK INK AND WHITE
+PAPER.
+
+A medium or dark original color does NOT mean the entire surface should
+become a gray fill. Do not uniformly fill shirts, capes, hoods, hair,
+pants, or skin with gray, no matter how dark the original color was.
+
+Instead:
+- LIGHT AREAS: leave as clean white paper.
+- MID-VALUE AREAS: use linework, sparse hatching, and localized shadow
+  shapes — not a wash.
+- DARK AREAS: use solid black ink selectively and structurally, following
+  the actual form and folds of the object.
+- VERY DARK MATERIALS (black pants, dark hoods, dark hair): may contain
+  larger solid-black areas, but must preserve enough white linework,
+  highlights, fold lines, and silhouette separation to clearly show the
+  material, its folds, and the anatomy underneath. A dark garment is
+  built from black ink shapes with white gaps for form, not a single gray
+  or black rectangle.
+
+GRAY MUST NEVER BECOME THE DOMINANT FILL COLOR. The viewer should perceive
+WHITE PAPER + BLACK INK first, with any gray only as a rare, secondary,
+localized technique — never a full-surface tone. A character with dark
+clothing should look INKED, not COLORED GRAY. Think like a traditional
+manga/webtoon ink artist working in pure line and black ink, not a
+grayscale painter softly shading a form.
+
+The uploaded character sheet is the ABSOLUTE REFERENCE for the character's
+identity and design (hairstyle, hair length, facial features, eye shape,
+body proportions, costume, accessories, weapons, distinctive elements) —
+but not for color, and not for how it is rendered. The sheet determines
+WHAT the character looks like; this style determines HOW it is drawn.
+
+Worked example — a character with light pink hair, a pink cape, a white
+dress, gold trim, black pants, pale skin, and pink eyes:
+- pink hair -> mostly white/paper, with black ink or fine hatching only in
+  the shadows between hair strands and where locks overlap
+- pink cape -> mostly light/white, with black ink at the folds and the
+  cape's inner-facing shadow
+- white dress -> stays almost entirely white, line only
+- gold trim -> the lit face of the metal stays white/paper, the metal's
+  own shadow is black
+- black pants -> built mostly from solid black ink shapes since the
+  original color is dark, but with white fold lines and highlight gaps
+  left in so the legs, folds, and silhouette still read clearly — never
+  one flat black rectangle
+- pale skin -> white, with only minimal black linework for shadow (under
+  chin, hair shadow on face)
+- pink eyes -> this is the one part that stays actual color (see below)
+
+Worked example — a secondary character with a brown hood, a dark scarf, a
+brown/beige shirt, dark pants, and tan skin (no color sheet attached, but
+the same rule applies to every character in the panel, not only the one
+with a reference sheet):
+- brown hood -> mostly white/paper base, built from black contour lines
+  and fold lines, with solid black only in the deepest folds/interior
+  shadow — NOT a gray or brown-toned fill over the whole hood
+- dark scarf -> denser black ink than the hood (it's a darker original
+  color), but still built as ink shapes with white gaps at folds and
+  edges, not a single dark block
+- brown/beige shirt -> mostly white paper with black contour and fold
+  lines, black ink concentrated only at armpit creases, overlaps, and
+  where fabric bunches
+- dark pants -> same rule as the black pants above: solid black ink
+  shapes with white fold lines kept visible
+- tan skin -> white/paper, with only minimal black linework for shadow
+  (this does not change just because the character is secondary)
+
+A secondary or "less important" character gets simpler, sparser linework
+than the protagonist — fewer lines overall — but is never rendered with a
+gray fill as a shortcut. Less important still means white paper + black
+ink, just with less of it.
+
+INK AND LINEWORK:
+
+This is NOT a color illustration with a black-and-white filter, and it is
+NOT a flat grayscale-painted illustration either. Draw the scene as if a
+professional webtoon artist originally created it directly in monochrome
+ink on paper.
+
+Use: confident expressive ink lines, varied line weight, clean strong
+contours, delicate interior lines, detailed hair strands, detailed fabric
+folds, precise facial features, intricate costume details, carefully
+constructed hands, controlled solid black areas, selective hatching where
+it earns its place.
+
+Priority for this style, in order: character drawing quality (face, hair,
+hands, costume detail) far above everything else, then black linework and
+solid black shadow shapes, then sparse hatching for mid-tones, and last —
+minimal — background linework and any gray at all.
+
+The main character receives the most refined, detailed linework.
+Secondary characters and background receive lighter, sparser linework —
+fewer lines, not gray fill instead of lines.
+
+Do NOT make every surface equally detailed.
+Do NOT cover the entire image with hatching or gray.
+Do NOT make the background look like an architectural technical drawing —
+keep background linework light and sparse, secondary to the character.
+Leave large areas of pure white paper as intentional visual rest.
+
+The result should look like an artist carefully inked one finished
+webtoon page, not like an AI converted a colored image into a grayscale
+illustration.
+
+SELECTIVE COLOR:
+
+Color is an accent, NOT a rendering system. Only a tiny number of elements
+(commonly just the eyes; sometimes blood, a magical glow, a few petals, or
+a gemstone) retain actual, vivid color. Everything outside the selected
+accent(s) is strictly neutral: white paper, black ink, and — sparingly —
+hatching. No hue, no tint, no pastel version of the original color
+anywhere else.
+
+This is a technique for WHEN a point color is wanted, not a mandate that
+every panel must contain one. A fully monochrome panel with no color
+accent at all is also correct. If the scene does not specify an accent,
+the character's eyes are the safest default — but never force more than
+one or two accents, and never let color leak into hair, clothing, or
+weapons just because the sheet shows them in that color.
+
+## 하지 마라
+
+- rendering the artwork as a grayscale painting, filling hair/cape/skin/
+  clothing with a flat gray tone, evenly distributing gray across the
+  character, treating gray as a coloring method rather than a rare shadow
+  accent
+- coloring the entire character, coloring the entire background, coloring
+  hair/clothing simply because the character sheet shows them in color
+- desaturating the original color into a visible tint (gray-pink, gray-
+  blue, pastel-gray) instead of true neutral black/white/gray
+- full color illustration, fully colored character, colorful anime
+  illustration, anime key visual, light novel cover
+- character sheet, character reference sheet, generic anime illustration
+- flat outlines, outline filter, auto traced appearance, vector-like line
+  art, uniform line thickness, low detail, low density, lazy linework,
+  unfinished scribble
+- uniform hatching across the whole image, equally detailed background,
+  technical architectural drawing, heavily rendered background
+- soft digital painting, airbrushed shading, watercolor, milky colors,
+  glossy full-color rendering, sepia wash, single-hue tint over the whole
+  image
+- 3D render, CGI, plastic appearance, photorealistic
+- chibi, kawaii, moe, childlike proportions, oversized eyes, extremely
+  large eyes, generic facial features
+- simplified costume, missing accessories, incorrect costume, redesigned
+  character, different hairstyle, different clothing, different weapon,
+  extra accessories, random ornaments
+- anatomical distortion, bad hands, extra fingers, missing fingers,
+  deformed hands, duplicate limbs, extra limbs
+- stiff pose, static pose, front-facing character pose, passport
+  composition, symmetrical character portrait
+- low quality, blurry, muddy lines, messy unreadable linework
+- excessive color, too many colored areas, large color blocks, heavy
+  gradients

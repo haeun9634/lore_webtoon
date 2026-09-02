@@ -1,0 +1,808 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LORE — new_harness 실험</title>
+<link rel="stylesheet" href="/static/style.css">
+<!-- 검수 화면(방향 고르기·콘티·시트) 스타일. demo.html 의 목업이 같은
+     파일을 읽어서, 여기만 고쳐도 둘이 같이 바뀐다. -->
+<link rel="stylesheet" href="/static/nh-review.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐋</text></svg>">
+<!-- 검수 화면을 그리는 함수들. demo.html 의 목업이 같은 함수를 쓴다. -->
+<script src="/static/nh-review.js"></script>
+<style>
+  .nh-wrap { max-width: 640px; margin: 0 auto; padding: 24px 16px 80px; }
+  /* 방향 고르기·검수 화면은 카드가 여럿이라 좁은 폭에 갇히면 PC에서 유독
+     작아 보인다 — 그 화면들만 넓힌다(입력 폼·결과는 그대로 640px). */
+  @media (min-width: 760px) {
+    #picker.wide, #boardApproval, #sheetApproval { max-width: none; }
+    .nh-wrap:has(#picker:not(.hidden)),
+    .nh-wrap:has(#boardApproval:not(.hidden)),
+    .nh-wrap:has(#sheetApproval:not(.hidden)) { max-width: 880px; }
+  }
+  .nh-sub {
+    background: #fff3e0; border: 1px solid #f0d9b5; border-radius: 8px;
+    padding: 10px 12px; font-size: 13px; line-height: 1.5; margin: 12px 0 24px; color: #5a4a2f;
+  }
+  fieldset { border: 1px solid var(--line-2, #ddd); border-radius: 10px; padding: 16px; margin: 0 0 16px; }
+  legend { font-size: 13px; color: #666; padding: 0 6px; }
+  label { display: block; font-size: 13px; color: #444; margin: 10px 0 4px; }
+  input[type=text], textarea {
+    width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px;
+    font-size: 14px; font-family: inherit; box-sizing: border-box;
+  }
+  textarea { resize: vertical; min-height: 60px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+  .photos { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .photos img { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; border: 1px solid #ddd; }
+  .hidden { display: none !important; }
+  .nh-err {
+    background: #fee; border: 1px solid #f3b; color: #900; border-radius: 8px;
+    padding: 10px 12px; font-size: 13px; margin-top: 12px;
+  }
+  /* ---- 결과: 페이지 목록 ---- */
+  .nh-pages { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+  .nh-page { border-radius: 8px; overflow: hidden; border: 1px solid var(--line-2, #ddd); }
+  .nh-page img { width: 100%; display: block; }
+  .nh-page-tools { display: flex; gap: 6px; padding: 8px; }
+  .nh-regen-msg { font-size: 12px; color: #777; margin: 0 8px 8px; min-height: 1em; }
+  .nh-episode img { width: 100%; border-radius: 8px; display: block; margin-top: 12px; }
+  /* ---- 편집실 ---- */
+  .nh-editor-veil {
+    position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 200;
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+  }
+  .nh-editor-box {
+    background: var(--card, #fff); border-radius: 12px; max-width: 920px; width: 100%;
+    max-height: 92vh; overflow: auto; padding: 16px; display: flex; gap: 16px; flex-wrap: wrap;
+  }
+  .nh-canvas-wrap { position: relative; flex: 1 1 380px; min-width: 260px; user-select: none; }
+  .nh-canvas-wrap img { width: 100%; display: block; border-radius: 8px; cursor: crosshair; }
+  .nh-item-box {
+    position: absolute; border: 2px dashed #222; border-radius: 10px;
+    background: rgba(255,255,255,.85); display: flex; align-items: center; justify-content: center;
+    text-align: center; padding: 4px; font-size: 12px; line-height: 1.3; cursor: pointer;
+    transform: translate(-50%, -50%);
+  }
+  .nh-item-box.sel { border-color: #e0552b; background: rgba(255,240,230,.95); }
+  .nh-side { flex: 1 1 260px; min-width: 240px; }
+  .nh-side h3 { font-size: 14px; margin: 0 0 8px; }
+  .nh-form-row { margin-bottom: 8px; }
+  .nh-form-row label { font-size: 12px; color: #555; margin-bottom: 3px; }
+  .nh-form-row select, .nh-form-row input[type=text], .nh-form-row input[type=number] {
+    width: 100%; padding: 6px 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px;
+    box-sizing: border-box;
+  }
+  .nh-item-list { list-style: none; padding: 0; margin: 10px 0; max-height: 140px; overflow-y: auto; }
+  .nh-item-list li {
+    display: flex; justify-content: space-between; gap: 6px; align-items: center;
+    padding: 4px 6px; border-radius: 6px; font-size: 12px; cursor: pointer;
+  }
+  .nh-item-list li.sel { background: #ffe9df; }
+  .nh-item-list button { border: none; background: none; color: #900; cursor: pointer; font-size: 12px; }
+  .nh-editor-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  /* ---- 진행 중 실시간 페이지 미리보기 ---- */
+  .nh-live-pages { margin-top: 12px; }
+  .nh-live-pages h3 { font-size: 13px; color: #666; margin: 0 0 8px; }
+  .nh-browse-row { text-align: center; margin-top: 10px; }
+  /* ---- 그림체 고르기 ---- */
+  .nh-style-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; margin: 4px 0 10px; }
+  .nh-style-opt { position: relative; }
+  .nh-style-opt input { position: absolute; opacity: 0; pointer-events: none; }
+  .nh-style-box {
+    display: block; text-align: center; padding: 10px 6px; border-radius: 10px;
+    border: 1.5px solid var(--line-2, #ddd); font-size: 12px; cursor: pointer; background: var(--card, #fff);
+  }
+  .nh-style-opt input:checked + .nh-style-box {
+    border-color: #222; border-width: 2px; background: rgba(0,0,0,.04); font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<div class="nh-wrap">
+  <h1 style="font-size:20px;margin:0 0 4px;">new_harness 실험 화면</h1>
+  <div class="nh-sub">
+    제품 화면(index.html)과 완전히 별개인 연결 실험입니다. 실제 이미지 생성
+    호출이 나갑니다(과금). 그림체·대사 렌더링은 new_harness 그대로 — 여기서
+    안 고칩니다. 편집실은 얹은 말풍선·스티커를 그림 위에 추가로 굽습니다.
+  </div>
+
+  <form id="form">
+    <fieldset>
+      <legend>캐릭터</legend>
+      <label>이름 *</label>
+      <input type="text" name="name" required>
+      <label>설명</label>
+      <textarea name="character" placeholder="어떤 사람인지 자유롭게"></textarea>
+      <label>장르</label>
+      <input type="text" name="genre" placeholder="예: 로맨스 판타지">
+      <label>그림체</label>
+      <div class="nh-style-picker" id="stylePicker"></div>
+      <div class="grid2" id="fields"></div>
+      <label>사진 (최대 4장, 선택)</label>
+      <input type="file" id="photoInput" accept="image/*" multiple>
+      <div class="photos" id="photoPreview"></div>
+    </fieldset>
+    <button class="btn btn-primary" style="width:100%" type="submit" id="submitBtn">이야기 후보 만들기</button>
+  </form>
+
+  <div id="picker" class="hidden">
+    <div class="nh-picker-head">
+      <h2>어느 방향으로 갈까요?</h2>
+      <p class="nh-hint">넷 중 하나를 고릅니다. 장면은 접혀 있고, 눌러야 펼쳐집니다.</p>
+    </div>
+    <div id="cards"></div>
+    <div class="nh-approval-actions" id="pickActions" hidden>
+      <button type="button" class="btn btn-quiet" id="pickAgain">다시 고르기</button>
+      <button type="button" class="btn btn-primary" id="pickBtn">이대로 진행하기</button>
+    </div>
+  </div>
+
+  <!-- 대기 화면 — index.html/demo.html 의 #progress 와 같은 마크업(마스코트·
+       진행바). 진짜 진행률로 채운다는 점만 demo.html 과 다르다. -->
+  <section id="progress" class="progress hidden">
+    <div class="progress-inner">
+      <header class="progress-head">
+        <div class="stage-now">
+          <div class="stage-art" id="stageArt" data-stage="story" aria-hidden="true"></div>
+          <p class="stage-say" id="mascotLine">루가 이야기를 만들고 있어요</p>
+          <div class="lou-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="louProgress">
+            <div class="lou-bar"><i id="louBarFill"></i></div>
+            <span class="lou-pct" id="louPct">0%</span>
+          </div>
+          <p class="stage-clock">
+            <span class="clock-time" id="clock">0:00</span>
+            <span class="clock-label">경과</span>
+          </p>
+          <details class="stage-detail">
+            <summary>지금 하고 있는 일 자세히</summary>
+            <ol class="rail" id="rail"></ol>
+          </details>
+        </div>
+      </header>
+      <div class="play">
+        <div class="mascot-stage" id="mascotStage">
+          <button type="button" class="mascot" id="mascot" aria-label="루를 눌러 보기">
+            <img id="mascotImg" src="/static/lou/react/idle/01.webp" alt="" draggable="false">
+          </button>
+        </div>
+        <p class="play-say" id="playSay">루를 눌러 보세요</p>
+      </div>
+
+      <!-- 그림 그리는 동안 지금까지 나온 페이지를 바로 보여준다. 완성 전
+           결과 화면(#result)과 마크업이 겹치지 않게 별도 자리를 쓴다. -->
+      <div class="nh-live-pages hidden" id="livePages">
+        <h3 id="livePagesLabel">지금까지 그린 페이지</h3>
+        <div class="nh-pages" id="livePagesList"></div>
+      </div>
+
+      <!-- 본편 demo.html 의 progBrowse 와 같은 자리 — 기다리는 동안 다른
+           웹툰을 보러 가도 이 작업은 서버에서 계속 돈다(job 이 프로세스로
+           살아 있음, 브라우저 탭과 무관). -->
+      <div class="nh-browse-row">
+        <button type="button" class="btn btn-quiet btn-sm" id="progBrowse">
+          기다리는 동안 다른 웹툰 둘러보기 →
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 콘티 검수 -->
+  <div id="boardApproval" class="nh-approval hidden">
+    <h2>고른 이야기를 확인해 주세요</h2>
+    <p class="nh-hint">여기서 정한 대로 그림이 나옵니다. <span id="boardCount"></span></p>
+    <div class="nh-cast" id="boardCast"></div>
+    <div id="boardScenes"></div>
+    <div class="nh-approval-actions">
+      <button type="button" class="btn btn-quiet" id="boardRetry">다시 만들기</button>
+      <button type="button" class="btn btn-primary" id="boardApprove">이대로 진행</button>
+    </div>
+  </div>
+
+  <!-- 시트 검수 -->
+  <div id="sheetApproval" class="nh-approval hidden">
+    <h2>캐릭터 시트를 확인해 주세요</h2>
+    <p class="nh-hint">이제부터 모든 페이지가 이 얼굴을 따라갑니다.</p>
+    <img class="nh-sheet-img" id="sheetImg" alt="캐릭터 시트">
+    <div class="nh-approval-actions">
+      <button type="button" class="btn btn-quiet" id="sheetRetry">다시 만들기</button>
+      <button type="button" class="btn btn-primary" id="sheetApprove">이대로 진행</button>
+    </div>
+  </div>
+
+  <div id="result" class="hidden">
+    <h2 style="font-size:16px;">완성</h2>
+    <div class="nh-pages" id="pagesList"></div>
+    <div class="nh-episode">
+      <h3 style="font-size:14px;">이어붙인 한 장</h3>
+      <img id="episodeImg" alt="완성된 한 편">
+    </div>
+  </div>
+
+  <div id="errorBox" class="hidden nh-err"></div>
+</div>
+
+<!-- 편집실 -->
+<div class="nh-editor-veil hidden" id="editorVeil">
+  <div class="nh-editor-box">
+    <div class="nh-canvas-wrap" id="canvasWrap">
+      <img id="editorImg" alt="편집 중인 페이지">
+    </div>
+    <div class="nh-side">
+      <h3 id="editorTitle">페이지 편집</h3>
+      <p class="nh-hint">그림 위를 눌러서 말풍선·스티커·효과음을 놓으세요.</p>
+      <ul class="nh-item-list" id="itemList"></ul>
+      <div id="itemForm" class="hidden">
+        <div class="nh-form-row">
+          <label>종류</label>
+          <select id="fType">
+            <option value="bubble">말풍선</option>
+            <option value="sticker">스티커(이모지)</option>
+            <option value="sfx">효과음</option>
+          </select>
+        </div>
+        <div class="nh-form-row" id="fVariantRow">
+          <label>모양</label>
+          <select id="fVariant">
+            <option value="normal">보통</option>
+            <option value="shout">외침</option>
+            <option value="whisper">속삭임</option>
+            <option value="thought">생각</option>
+            <option value="narration">나레이션</option>
+            <option value="flash">번쩍</option>
+          </select>
+        </div>
+        <div class="nh-form-row">
+          <label>내용</label>
+          <input type="text" id="fText" maxlength="400">
+        </div>
+        <div class="grid2">
+          <div class="nh-form-row">
+            <label>폭 (%)</label>
+            <input type="number" id="fW" min="3" max="100" value="30">
+          </div>
+          <div class="nh-form-row">
+            <label>글자 크기</label>
+            <input type="number" id="fSize" min="4" max="200" value="15">
+          </div>
+        </div>
+        <button type="button" class="btn btn-danger btn-sm" id="fRemove">이 항목 지우기</button>
+      </div>
+      <div class="nh-editor-actions">
+        <button type="button" class="btn btn-quiet btn-sm" id="editorClose">닫기</button>
+        <button type="button" class="btn btn-quiet btn-sm" id="editorSave">저장만</button>
+        <button type="button" class="btn btn-primary btn-sm" id="editorBake">저장하고 굽기</button>
+      </div>
+      <div id="editorMsg" class="nh-hint"></div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/base.js"></script>
+<script src="/static/lou-art.js"></script>
+<script src="/static/lou-play.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const FIELD_KEYS = ["나이", "성별", "직업", "성격", "말투", "과거", "관계", "약점"];
+const fieldsBox = $("#fields");
+for (const k of FIELD_KEYS) {
+  const label = document.createElement("label");
+  label.textContent = k;
+  const input = document.createElement("input");
+  input.type = "text"; input.name = "field_" + k;
+  fieldsBox.appendChild(label);
+  fieldsBox.appendChild(input);
+}
+
+// newharness_pipeline.STYLE_CHOICES/STYLE_LABEL 과 같은 키 — 서버가 이
+// 키만 알아듣는다(모르는 값은 서버가 기본값 webtoon 으로 떨어뜨린다).
+const STYLE_LABEL = {
+  webtoon: "일반 웹툰", romance: "로맨스 판타지", frost: "세미리얼 · 성인향",
+  cinematic: "시네마틱 반실사", pastel: "일상툰 감성", noir: "다크 느와르",
+  shoujo: "순정 · BL", game: "게임 원화",
+};
+const stylePicker = $("#stylePicker");
+stylePicker.innerHTML = Object.entries(STYLE_LABEL).map(([key, label], i) => `
+  <label class="nh-style-opt">
+    <input type="radio" name="style" value="${key}" ${i === 0 ? "checked" : ""}>
+    <span class="nh-style-box">${label}</span>
+  </label>`).join("");
+
+let photoDataUrls = [];
+$("#photoInput").addEventListener("change", async (e) => {
+  const files = Array.from(e.target.files).slice(0, 4);
+  photoDataUrls = await Promise.all(files.map(f => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(f);
+  })));
+  const preview = $("#photoPreview");
+  preview.innerHTML = "";
+  for (const url of photoDataUrls) {
+    const img = document.createElement("img");
+    img.src = url;
+    preview.appendChild(img);
+  }
+});
+
+function showError(msg) {
+  const box = $("#errorBox");
+  box.textContent = msg;
+  box.classList.remove("hidden");
+}
+function clearError() { $("#errorBox").classList.add("hidden"); }
+
+let jobId = null, runId = null, pollTimer = null, pickedN = null;
+
+$("#form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  clearError();
+  const btn = $("#submitBtn");
+  btn.disabled = true;
+  btn.textContent = "이야기 후보를 만드는 중…";
+
+  const data = new FormData(e.target);
+  const fields = {};
+  for (const k of FIELD_KEYS) fields[k] = data.get("field_" + k) || "";
+  const form = {
+    name: data.get("name") || "", character: data.get("character") || "",
+    genre: data.get("genre") || "", fields, photos_data: photoDataUrls,
+    style: data.get("style") || "webtoon",
+  };
+
+  try {
+    const res = await fetch("/api/nh/create", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(form),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error || "요청이 실패했습니다");
+    jobId = body.id;
+    $("#form").classList.add("hidden");
+    $("#progress").classList.remove("hidden");
+    setupLou();
+    startPolling();
+  } catch (err) {
+    showError(err.message);
+    btn.disabled = false;
+    btn.textContent = "이야기 후보 만들기";
+  }
+});
+
+function renderCards(directions) {
+  const cards = $("#cards");
+  cards.innerHTML = "";
+  pickedN = null;
+  $("#pickActions").hidden = true;
+  for (const d of directions) {
+    const card = document.createElement("div");
+    card.className = "nh-card";
+    card.dataset.n = d.n;
+    card.innerHTML = NHReview.directionCardHtml(d);
+    // 장면을 펴 보는 것과 이 방향을 고르는 것은 다른 행동이다 — 토글을
+    // 눌렀을 뿐인데 선택까지 되면, 보려던 사람이 고른 것이 된다.
+    const toggle = card.querySelector("details");
+    if (toggle) toggle.addEventListener("click", e => e.stopPropagation());
+    card.addEventListener("click", () => {
+      document.querySelectorAll(".nh-card").forEach(c => c.classList.remove("picked"));
+      card.classList.add("picked");
+      pickedN = d.n;
+      $("#pickActions").hidden = false;
+    });
+    cards.appendChild(card);
+  }
+}
+
+$("#pickAgain").addEventListener("click", () => {
+  document.querySelectorAll(".nh-card").forEach(c => c.classList.remove("picked"));
+  pickedN = null;
+  $("#pickActions").hidden = true;
+});
+
+$("#pickBtn").addEventListener("click", async () => {
+  if (pickedN === null) return;
+  const btn = $("#pickBtn");
+  btn.disabled = true;
+  btn.textContent = "만드는 중…";
+  try {
+    const res = await fetch(`/api/nh/jobs/${jobId}/pick`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ n: pickedN }),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error || "요청이 실패했습니다");
+    $("#picker").classList.add("hidden");
+    $("#pickActions").hidden = true;
+    $("#progress").classList.remove("hidden");
+    startPolling();
+  } catch (err) {
+    showError(err.message);
+    btn.disabled = false;
+    btn.textContent = "이대로 진행하기";
+  }
+});
+
+// pipeline.py 의 STAGE_SPEC 을 흉내낸 표시용 정보 — new_harness 신호는
+// newharness_pipeline.STAGE_LABEL 과 같은 키를 쓴다.
+const STAGE_SAY = {
+  story: "루가 이야기를 만들고 있어요", board: "루가 고른 방향을 정리하고 있어요",
+  sheet: "루가 캐릭터를 디자인하고 있어요", pages: "루가 그림을 그리고 있어요",
+};
+// style.css 의 .stage-art[data-stage] 그림은 story/sheet/board/art/bind 만
+// 있다(classic 5단계 기준) — new_harness 의 "pages" 는 그림 그리는 단계라
+// 가장 가까운 art 그림을 빌려 쓴다. 표시 문구(STAGE_SAY)는 그대로 둔다.
+const STAGE_ART = { story: "story", board: "board", sheet: "sheet", pages: "art" };
+
+function paintRail(stages, idx, label) {
+  $("#rail").innerHTML = stages.map((key, n) => {
+    const state = n < idx ? "done" : n === idx ? "active" : "todo";
+    const mark = state === "done" ? "✓" : String(n + 1).padStart(2, "0");
+    return `<li class="stage" data-state="${state}">
+      <span class="stage-dot">${mark}</span>
+      <div class="stage-main"><h3>${n === idx ? label : (STAGE_SAY[key] || key)}</h3></div>
+    </li>`;
+  }).join("");
+}
+
+function startPolling() {
+  if (pollTimer) return;
+  pollTimer = setInterval(tick, 800);
+  tick();
+}
+
+async function tick() {
+  if (!jobId) return;
+  let snap;
+  try {
+    const res = await fetch(`/api/nh/jobs/${jobId}`);
+    snap = await res.json();
+    if (!res.ok) throw new Error(snap.error || "상태를 읽지 못했습니다");
+  } catch (err) {
+    showError(err.message);
+    return;
+  }
+  if (snap.run_id) runId = snap.run_id;
+
+  // 시계는 서버가 준 elapsed(작업 시작부터 총 경과)를 그대로 찍는다 — 프론트
+  // 자체 타이머로 따로 재면 검수 통과마다 다시 만들어야 해서 놓치기 쉽다
+  // (실제로 놓쳤었다: 검수 통과 후 0:00 에 멈추는 버그, 2026-08-31).
+  if (typeof snap.elapsed === "number") {
+    const s = Math.floor(snap.elapsed);
+    $("#clock").textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  }
+
+  if (snap.stage) {
+    $("#stageArt").dataset.stage = STAGE_ART[snap.stage] || snap.stage;
+    let say = STAGE_SAY[snap.stage] || snap.stage_label;
+    if (snap.stage === "pages" && snap.art && snap.art.total) {
+      say = `루가 그림을 그리고 있어요 (${snap.art.done}/${snap.art.total})`;
+    }
+    $("#mascotLine").textContent = say;
+    $("#louBarFill").style.width = snap.pct + "%";
+    $("#louPct").textContent = snap.pct + "%";
+    $("#louProgress").setAttribute("aria-valuenow", String(snap.pct));
+    paintRail(snap.stages || [], snap.stage_index || 0, say);
+  }
+
+  // 그림 그리는 동안 지금까지 나온 페이지를 실시간으로 보여준다 — 몇 장
+  // 나왔는지(숫자)뿐 아니라 실제로 어떤 그림이 나왔는지도 바로 보인다.
+  if (snap.status === "running" && snap.stage === "pages" && snap.art) {
+    renderLivePages(snap.art.done);
+  } else {
+    $("#livePages").classList.add("hidden");
+  }
+
+  if (snap.status === "awaiting_pick") {
+    stopPolling();
+    $("#progress").classList.add("hidden");
+    $("#picker").classList.remove("hidden");
+    renderCards(snap.directions || []);
+  } else if (snap.status === "awaiting_board") {
+    stopPolling();
+    $("#progress").classList.add("hidden");
+    renderBoard(snap.board_summary);
+    $("#boardApproval").classList.remove("hidden");
+  } else if (snap.status === "awaiting_sheet") {
+    stopPolling();
+    $("#progress").classList.add("hidden");
+    $("#sheetImg").src = `/api/nh/jobs/${jobId}/sheet.png?t=${Date.now()}`;
+    $("#sheetApproval").classList.remove("hidden");
+  } else if (snap.status === "done") {
+    stopPolling();
+    $("#progress").classList.add("hidden");
+    await showResult();
+  } else if (snap.status === "error") {
+    stopPolling();
+    showError(snap.error || "실패했습니다");
+  }
+}
+
+function stopPolling() {
+  clearInterval(pollTimer); pollTimer = null;
+}
+
+// 그림 그리는 동안 실시간 페이지 갤러리. done 장만 실제로 존재하므로
+// 그만큼만 그린다 — 아직 없는 장을 요청하면 404 라 아예 안 부른다.
+let liveShown = 0;
+function renderLivePages(done) {
+  if (!done || !runId) { $("#livePages").classList.add("hidden"); return; }
+  $("#livePages").classList.remove("hidden");
+  $("#livePagesLabel").textContent = `지금까지 그린 페이지 (${done}장)`;
+  if (done === liveShown) return;               // 새로 나온 게 없으면 안 다시 그림
+  liveShown = done;
+  const list = $("#livePagesList");
+  list.innerHTML = Array.from({ length: done }, (_, i) => i + 1).reverse().map(n => `
+    <div class="nh-page">
+      <img src="/api/nh/runs/${runId}/page/${n}?raw=1&w=600&t=${Date.now()}" alt="페이지 ${n}">
+    </div>`).join("");
+}
+
+// --------------------------------------------------------------------- 검수
+
+function renderBoard(summary) {
+  NHReview.fillBoard(summary);
+}
+
+async function decide(kind, decision, note) {
+  try {
+    const body = { decision };
+    if (note) body.note = note;
+    const res = await fetch(`/api/nh/jobs/${jobId}/${kind}-decision`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const out = await res.json();
+    if (!res.ok) throw new Error(out.error || "요청이 실패했습니다");
+    $(`#${kind === "board" ? "boardApproval" : "sheetApproval"}`).classList.add("hidden");
+    liveShown = 0;
+    $("#progress").classList.remove("hidden");
+    startPolling();
+  } catch (err) {
+    showError(err.message);
+  }
+}
+
+$("#boardApprove").addEventListener("click", () => decide("board", "approve"));
+$("#sheetApprove").addEventListener("click", () => decide("sheet", "approve"));
+// "다시 만들기"는 바로 안 나가고, NHReview.wireRetryNote 가 붙인 칸에서
+// 요청 사항(비어 있어도 됨)을 받은 뒤에 나간다.
+NHReview.wireRetryNote("boardRetry", note => decide("board", "retry", note));
+NHReview.wireRetryNote("sheetRetry", note => decide("sheet", "retry", note));
+
+$("#progBrowse").addEventListener("click", () => {
+  location.href = (window.LORE ? window.LORE.at("/works") : "/works");
+});
+
+// --------------------------------------------------------------------- 결과
+
+async function showResult() {
+  $("#result").classList.remove("hidden");
+  $("#episodeImg").src = `/api/nh/jobs/${jobId}/episode.png?t=${Date.now()}`;
+
+  let pages = [];
+  try {
+    pages = (await (await fetch(`/api/nh/runs/${runId}/pages`)).json()).pages || [];
+  } catch { /* 아래에서 빈 목록으로 처리 */ }
+
+  const list = $("#pagesList");
+  list.innerHTML = pages.map(n => `
+    <div class="nh-page" data-page="${n}">
+      <img src="/api/nh/runs/${runId}/page/${n}?w=800&t=${Date.now()}" alt="페이지 ${n}">
+      <div class="nh-page-tools">
+        <button type="button" class="btn btn-primary btn-sm nh-edit-btn" data-page="${n}">편집</button>
+        <button type="button" class="btn btn-quiet btn-sm nh-regen-btn" data-page="${n}">다시 그리기</button>
+      </div>
+      <p class="nh-regen-msg" id="regenMsg${n}"></p>
+    </div>`).join("");
+  list.querySelectorAll(".nh-edit-btn").forEach(b =>
+    b.addEventListener("click", () => openEditor(Number(b.dataset.page))));
+  list.querySelectorAll(".nh-regen-btn").forEach(b =>
+    b.addEventListener("click", () => regenPage(Number(b.dataset.page))));
+}
+
+// 페이지 하나만 다시 그린다 — 실제 이미지 호출이 또 나간다(과금). 끝나면
+// episode.png 도 새로 이어졌으므로 그것도 같이 새로고침한다.
+async function regenPage(no) {
+  const btn = document.querySelector(`.nh-regen-btn[data-page="${no}"]`);
+  const msg = document.getElementById(`regenMsg${no}`);
+  btn.disabled = true;
+  msg.textContent = "다시 그리는 중…";
+  let regenId;
+  try {
+    const res = await fetch(`/api/nh/runs/${runId}/page/${no}/regen`, { method: "POST" });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error || "요청이 실패했습니다");
+    regenId = body.id;
+  } catch (err) {
+    msg.textContent = err.message;
+    btn.disabled = false;
+    return;
+  }
+  const poll = setInterval(async () => {
+    let snap;
+    try {
+      snap = await (await fetch(`/api/nh/regens/${regenId}`)).json();
+    } catch {
+      return;                              // 한 번 실패해도 다음 폴링에서 재시도
+    }
+    if (snap.status === "queued") { msg.textContent = "차례를 기다리는 중…"; return; }
+    if (snap.status === "running") { msg.textContent = "다시 그리는 중…"; return; }
+    clearInterval(poll);
+    btn.disabled = false;
+    if (snap.status === "done") {
+      msg.textContent = snap.error ? snap.error : "다시 그렸습니다.";
+      const card = document.querySelector(`.nh-page[data-page="${no}"] img`);
+      if (card) card.src = `/api/nh/runs/${runId}/page/${no}?w=800&t=${Date.now()}`;
+      $("#episodeImg").src = `/api/nh/jobs/${jobId}/episode.png?t=${Date.now()}`;
+    } else {
+      msg.textContent = snap.error || "실패했습니다";
+    }
+  }, 1500);
+}
+
+// --------------------------------------------------------------------- 편집실
+//
+// overlay.py 의 clean_item() 스키마 그대로 — type/variant/text/x/y/w/size/rot/tail.
+// 화면은 퍼센트 좌표로만 다루고, 실제 말풍선 모양은 서버가 구울 때 그린다
+// (여기 미리보기는 위치·크기만 보여주는 상자다).
+
+let editorPage = null, editorItems = [], editorSel = -1, editorRefW = 720;
+
+async function openEditor(no) {
+  editorPage = no;
+  editorItems = [];
+  editorSel = -1;
+  $("#editorTitle").textContent = `페이지 ${no} 편집`;
+  $("#editorMsg").textContent = "";
+  const img = $("#editorImg");
+  img.src = `/api/nh/runs/${runId}/page/${no}?raw=1&w=1000&t=${Date.now()}`;
+  await new Promise(res => { img.onload = res; });
+  editorRefW = img.clientWidth || img.naturalWidth;
+
+  try {
+    const data = await (await fetch(`/api/nh/runs/${runId}/overlay`)).json();
+    const spec = (data.scenes || {})[String(no)];
+    if (spec && spec.items) editorItems = spec.items.map(it => ({ ...it }));
+  } catch { /* 없으면 빈 목록 */ }
+
+  renderItems();
+  $("#editorVeil").classList.remove("hidden");
+}
+
+function renderItems() {
+  const wrap = $("#canvasWrap");
+  wrap.querySelectorAll(".nh-item-box").forEach(el => el.remove());
+  editorItems.forEach((it, i) => {
+    const box = document.createElement("div");
+    box.className = "nh-item-box" + (i === editorSel ? " sel" : "");
+    box.style.left = it.x + "%";
+    box.style.top = it.y + "%";
+    box.style.width = it.w + "%";
+    box.textContent = it.text || "(빈 내용)";
+    box.addEventListener("click", (e) => { e.stopPropagation(); selectItem(i); });
+    wrap.appendChild(box);
+  });
+
+  const list = $("#itemList");
+  list.innerHTML = editorItems.map((it, i) => `
+    <li class="${i === editorSel ? "sel" : ""}" data-i="${i}">
+      <span>${TYPE_LABEL[it.type] || it.type}: ${(it.text || "").slice(0, 16)}</span>
+      <button type="button" data-del="${i}">삭제</button>
+    </li>`).join("");
+  list.querySelectorAll("li").forEach(li =>
+    li.addEventListener("click", (e) => {
+      if (e.target.tagName === "BUTTON") return;
+      selectItem(Number(li.dataset.i));
+    }));
+  list.querySelectorAll("[data-del]").forEach(b =>
+    b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      editorItems.splice(Number(b.dataset.del), 1);
+      editorSel = -1;
+      renderItems();
+      syncForm();
+    }));
+}
+
+const TYPE_LABEL = { bubble: "말풍선", sticker: "스티커", sfx: "효과음" };
+
+function selectItem(i) {
+  editorSel = i;
+  renderItems();
+  syncForm();
+}
+
+function syncForm() {
+  const form = $("#itemForm");
+  if (editorSel < 0 || !editorItems[editorSel]) { form.classList.add("hidden"); return; }
+  const it = editorItems[editorSel];
+  form.classList.remove("hidden");
+  $("#fType").value = it.type;
+  $("#fVariant").value = it.variant || "normal";
+  $("#fVariantRow").style.display = it.type === "bubble" ? "" : "none";
+  $("#fText").value = it.text || "";
+  $("#fW").value = it.w;
+  $("#fSize").value = it.size;
+}
+
+["fType", "fVariant", "fText", "fW", "fSize"].forEach(id => {
+  $("#" + id).addEventListener("input", () => {
+    if (editorSel < 0) return;
+    const it = editorItems[editorSel];
+    it.type = $("#fType").value;
+    it.variant = $("#fVariant").value;
+    it.text = $("#fText").value;
+    it.w = Number($("#fW").value) || it.w;
+    it.size = Number($("#fSize").value) || it.size;
+    $("#fVariantRow").style.display = it.type === "bubble" ? "" : "none";
+    renderItems();
+  });
+});
+
+$("#fRemove").addEventListener("click", () => {
+  if (editorSel < 0) return;
+  editorItems.splice(editorSel, 1);
+  editorSel = -1;
+  renderItems();
+  syncForm();
+});
+
+$("#canvasWrap").addEventListener("click", (e) => {
+  if (e.target.closest(".nh-item-box")) return;
+  const rect = $("#editorImg").getBoundingClientRect();
+  const x = ((e.clientX - rect.left) / rect.width) * 100;
+  const y = ((e.clientY - rect.top) / rect.height) * 100;
+  editorItems.push({ type: "bubble", variant: "normal", text: "새 대사", x, y, w: 30, size: 15, rot: 0, tail: "left" });
+  editorSel = editorItems.length - 1;
+  renderItems();
+  syncForm();
+  $("#fText").focus();
+  $("#fText").select();
+});
+
+async function saveOverlay() {
+  const overlayData = await (await fetch(`/api/nh/runs/${runId}/overlay`)).json();
+  const scenes = overlayData.scenes || {};
+  scenes[String(editorPage)] = { ref_w: editorRefW, items: editorItems };
+  const res = await fetch(`/api/nh/runs/${runId}/overlay`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ scenes, gaps: overlayData.gaps || {} }),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error || "저장하지 못했습니다");
+  return body;
+}
+
+$("#editorSave").addEventListener("click", async () => {
+  $("#editorMsg").textContent = "저장 중…";
+  try {
+    await saveOverlay();
+    $("#editorMsg").textContent = "저장했습니다.";
+  } catch (err) {
+    $("#editorMsg").textContent = err.message;
+  }
+});
+
+$("#editorBake").addEventListener("click", async () => {
+  $("#editorMsg").textContent = "굽는 중…";
+  try {
+    await saveOverlay();
+    const res = await fetch(`/api/nh/runs/${runId}/bake`, { method: "POST" });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error || "굽지 못했습니다");
+    $("#editorMsg").textContent = "완성! 결과 화면에 반영했습니다.";
+    await showResult();
+  } catch (err) {
+    $("#editorMsg").textContent = err.message;
+  }
+});
+
+$("#editorClose").addEventListener("click", () => {
+  $("#editorVeil").classList.add("hidden");
+});
+</script>
+</body>
+</html>
